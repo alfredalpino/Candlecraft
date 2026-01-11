@@ -169,7 +169,7 @@ This gives you:
 ### Step 1: Clone Repository
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/alfredalpino/Data-Puller-AiO.git
 cd Data-Puller-AiO
 ```
 
@@ -735,8 +735,27 @@ python pull_us-eq.py --symbol AAPL --timeframe 1m --limit 1000
 
 ## License
 
-[Add your license here]
+**PRIVATE USE LICENSE**
+
+This software is the private property of AlfredAlpino and is provided for private use only.
+
+**IMPORTANT:** This code is NOT allowed to be used, copied, modified, distributed, or shared without explicit written permission from AlfredAlpino.
+
+For full license terms, please see the [LICENSE](LICENSE) file in this repository.
+
+**Key Restrictions:**
+- ❌ No public distribution
+- ❌ No commercial use without permission
+- ❌ No copying or forking to other repositories
+- ❌ No sharing with third parties
+- ✅ Private use only (personal/internal use)
+
+**Permission Requests:**
+To request permission for any use beyond private use, please contact the repository owner at:
+https://github.com/alfredalpino
 
 ## Contributing
 
-Contributions are welcome! Please open an issue or submit a pull request.
+**Note:** This is a private repository. Contributions and pull requests are not accepted without explicit permission from the repository owner.
+
+For inquiries or permission requests, please contact AlfredAlpino.
