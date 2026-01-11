@@ -54,3 +54,5 @@ Thumbs.db
 data/
 *.csv
 *.parquet
+.env.backup
+.env.example
