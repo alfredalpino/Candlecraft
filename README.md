@@ -2,6 +2,10 @@
 
 A production-ready, modular system for pulling OHLCV (Open, High, Low, Close, Volume) data from multiple asset classes: **Cryptocurrency**, **Forex**, and **U.S. Equities**.
 
+**Repository:** https://github.com/alfredalpino/Data-Puller-AiO
+
+**License:** Private Use Only - See [LICENSE](LICENSE) for details
+
 ## Table of Contents
 
 - [Overview](#overview)
