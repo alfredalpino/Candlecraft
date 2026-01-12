@@ -29,7 +29,7 @@ import json
 import time
 import signal
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any, Callable, Tuple
 from enum import Enum
 from dataclasses import dataclass
@@ -82,6 +82,13 @@ class OHLCV:
     timeframe: str
     asset_class: AssetClass
     source: str
+
+
+def to_utc(ts: datetime) -> datetime:
+    """Convert datetime to timezone-aware UTC datetime."""
+    if ts.tzinfo is None:
+        return ts.replace(tzinfo=timezone.utc)
+    return ts.astimezone(timezone.utc)
 
 
 # Rate limiting for Twelve Data
@@ -288,7 +295,7 @@ def fetch_ohlcv_binance(
         ohlcv_data = []
         for kline in klines:
             ohlcv_data.append(OHLCV(
-                timestamp=datetime.fromtimestamp(kline[0] / 1000),
+                timestamp=to_utc(datetime.fromtimestamp(kline[0] / 1000)),
                 open=float(kline[1]),
                 high=float(kline[2]),
                 low=float(kline[3]),
@@ -387,8 +394,9 @@ def fetch_ohlcv_twelvedata(
         ohlcv_data = []
         for timestamp, row in df.iterrows():
             try:
+                ts = timestamp.to_pydatetime() if hasattr(timestamp, "to_pydatetime") else timestamp
                 ohlcv_data.append(OHLCV(
-                    timestamp=timestamp.to_pydatetime() if hasattr(timestamp, "to_pydatetime") else timestamp,
+                    timestamp=to_utc(ts),
                     open=float(row["open"]),
                     high=float(row["high"]),
                     low=float(row["low"]),
@@ -481,7 +489,7 @@ def stream_realtime_binance(
                 
                 if kline.get("x", False):
                     candle = OHLCV(
-                        timestamp=datetime.fromtimestamp(kline["t"] / 1000),
+                        timestamp=to_utc(datetime.fromtimestamp(kline["t"] / 1000)),
                         open=float(kline["o"]),
                         high=float(kline["h"]),
                         low=float(kline["l"]),
