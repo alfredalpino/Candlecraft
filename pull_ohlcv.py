@@ -30,9 +30,11 @@ import time
 import signal
 import threading
 from datetime import datetime, timezone
-from typing import List, Optional, Dict, Any, Callable, Tuple
+from typing import List, Optional, Dict, Any, Callable, Tuple, Protocol
 from enum import Enum
 from dataclasses import dataclass
+import csv
+from pathlib import Path
 
 # Load environment variables from .env file
 try:
@@ -82,6 +84,15 @@ class OHLCV:
     timeframe: str
     asset_class: AssetClass
     source: str
+
+
+class Sink(Protocol):
+    """
+    Output sink for OHLCV data.
+    Implementations decide where and how data is written.
+    """
+    def write(self, data: List[OHLCV]) -> None:
+        ...
 
 
 def to_utc(ts: datetime) -> datetime:
@@ -773,90 +784,113 @@ def stream_realtime_twelvedata(
         ws.close()
 
 
-def format_output(
-    ohlcv_data: List[OHLCV],
-    format_type: str = "table",
-    asset_class: AssetClass = AssetClass.CRYPTO
-) -> None:
-    """
-    Format and display OHLCV data with asset-class-aware formatting.
+def format_ohlcv_table(data: List[OHLCV], asset_class: AssetClass = AssetClass.CRYPTO) -> str:
+    """Format OHLCV data as a table. Returns formatted string."""
+    lines = []
+    lines.append("\n" + "=" * 100)
+    lines.append(f"{'Timestamp':<20} {'Open':>12} {'High':>12} {'Low':>12} {'Close':>12} {'Volume':>20}")
+    lines.append("=" * 100)
     
-    Args:
-        ohlcv_data: List of OHLCV objects
-        format_type: Output format ('table', 'csv', 'json')
-        asset_class: Asset class for formatting (crypto: 8 decimals, forex: 5, equity: 2 with $)
-    """
-    if format_type == "table":
-        print("\n" + "=" * 100)
-        print(f"{'Timestamp':<20} {'Open':>12} {'High':>12} {'Low':>12} {'Close':>12} {'Volume':>20}")
-        print("=" * 100)
+    for candle in data:
+        timestamp_str = candle.timestamp.strftime("%Y-%m-%d %H:%M:%S")
         
-        for candle in ohlcv_data:
-            timestamp_str = candle.timestamp.strftime("%Y-%m-%d %H:%M:%S")
-            
-            if asset_class == AssetClass.EQUITY:
-                open_str = f"${candle.open:>10.2f}"
-                high_str = f"${candle.high:>10.2f}"
-                low_str = f"${candle.low:>10.2f}"
-                close_str = f"${candle.close:>10.2f}"
-                volume_str = f"{candle.volume:>20,.0f}" if candle.volume else " " * 20
-            elif asset_class == AssetClass.FOREX:
-                open_str = f"{candle.open:>12.5f}"
-                high_str = f"{candle.high:>12.5f}"
-                low_str = f"{candle.low:>12.5f}"
-                close_str = f"{candle.close:>12.5f}"
-                volume_str = f"{candle.volume:>20.8f}" if candle.volume else " " * 20
-            else:  # CRYPTO
-                open_str = f"{candle.open:>12.8f}"
-                high_str = f"{candle.high:>12.8f}"
-                low_str = f"{candle.low:>12.8f}"
-                close_str = f"{candle.close:>12.8f}"
-                volume_str = f"{candle.volume:>20.8f}" if candle.volume else " " * 20
-            
-            print(
-                f"{timestamp_str:<20} "
-                f"{open_str} "
-                f"{high_str} "
-                f"{low_str} "
-                f"{close_str} "
-                f"{volume_str}"
-            )
+        if asset_class == AssetClass.EQUITY:
+            open_str = f"${candle.open:>10.2f}"
+            high_str = f"${candle.high:>10.2f}"
+            low_str = f"${candle.low:>10.2f}"
+            close_str = f"${candle.close:>10.2f}"
+            volume_str = f"{candle.volume:>20,.0f}" if candle.volume else " " * 20
+        elif asset_class == AssetClass.FOREX:
+            open_str = f"{candle.open:>12.5f}"
+            high_str = f"{candle.high:>12.5f}"
+            low_str = f"{candle.low:>12.5f}"
+            close_str = f"{candle.close:>12.5f}"
+            volume_str = f"{candle.volume:>20.8f}" if candle.volume else " " * 20
+        else:  # CRYPTO
+            open_str = f"{candle.open:>12.8f}"
+            high_str = f"{candle.high:>12.8f}"
+            low_str = f"{candle.low:>12.8f}"
+            close_str = f"{candle.close:>12.8f}"
+            volume_str = f"{candle.volume:>20.8f}" if candle.volume else " " * 20
         
-        print("=" * 100)
+        lines.append(
+            f"{timestamp_str:<20} "
+            f"{open_str} "
+            f"{high_str} "
+            f"{low_str} "
+            f"{close_str} "
+            f"{volume_str}"
+        )
     
-    elif format_type == "csv":
-        print("timestamp,open,high,low,close,volume")
-        for candle in ohlcv_data:
-            timestamp_str = candle.timestamp.strftime("%Y-%m-%d %H:%M:%S")
-            
-            if asset_class == AssetClass.EQUITY:
-                volume_str = str(int(candle.volume)) if candle.volume else ""
-            elif asset_class == AssetClass.FOREX:
-                volume_str = str(candle.volume) if candle.volume else ""
-            else:  # CRYPTO
-                volume_str = str(candle.volume) if candle.volume else ""
-            
-            print(
-                f"{timestamp_str},"
-                f"{candle.open},"
-                f"{candle.high},"
-                f"{candle.low},"
-                f"{candle.close},"
-                f"{volume_str}"
-            )
-    
-    elif format_type == "json":
-        output = []
-        for candle in ohlcv_data:
-            output.append({
-                "timestamp": candle.timestamp.isoformat(),
-                "open": candle.open,
-                "high": candle.high,
-                "low": candle.low,
-                "close": candle.close,
-                "volume": candle.volume,
-            })
-        print(json.dumps(output, indent=2))
+    lines.append("=" * 100)
+    return "\n".join(lines)
+
+
+def format_ohlcv_json(data: List[OHLCV]) -> str:
+    """Format OHLCV data as JSON. Returns formatted string."""
+    output = []
+    for candle in data:
+        output.append({
+            "timestamp": candle.timestamp.isoformat(),
+            "open": candle.open,
+            "high": candle.high,
+            "low": candle.low,
+            "close": candle.close,
+            "volume": candle.volume,
+        })
+    return json.dumps(output, indent=2)
+
+
+class StdoutSink:
+    """
+    Writes formatted OHLCV data to stdout.
+    """
+    def __init__(self, formatter: Callable[[List[OHLCV]], str]):
+        self.formatter = formatter
+
+    def write(self, data: List[OHLCV]) -> None:
+        output = self.formatter(data)
+        print(output)
+
+
+class CSVSink:
+    """
+    Writes OHLCV data to a CSV file.
+    """
+    def __init__(self, path: str):
+        self.path = Path(path)
+
+    def write(self, data: List[OHLCV]) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+
+        with self.path.open("w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                "timestamp",
+                "open",
+                "high",
+                "low",
+                "close",
+                "volume",
+                "symbol",
+                "timeframe",
+                "asset_class",
+                "source"
+            ])
+
+            for dp in data:
+                writer.writerow([
+                    dp.timestamp.isoformat(),
+                    dp.open,
+                    dp.high,
+                    dp.low,
+                    dp.close,
+                    dp.volume,
+                    dp.symbol,
+                    dp.timeframe,
+                    dp.asset_class.value,
+                    dp.source
+                ])
 
 
 def parse_dates(start_str: Optional[str], end_str: Optional[str]) -> Tuple[Optional[datetime], Optional[datetime]]:
@@ -1030,7 +1064,13 @@ Examples:
                     timezone=args.timezone,
                 )
                 
-                format_output(ohlcv_data, format_type=args.format, asset_class=asset_class)
+                if args.format == "table":
+                    sink = StdoutSink(lambda data: format_ohlcv_table(data, asset_class))
+                elif args.format == "csv":
+                    sink = CSVSink("output.csv")
+                else:
+                    sink = StdoutSink(format_ohlcv_json)
+                sink.write(ohlcv_data)
                 
                 print(f"\n⏳ Waiting 60 seconds before next poll...")
                 print("   (Press Ctrl+C to stop)")
@@ -1065,7 +1105,13 @@ Examples:
                 timezone=args.timezone,
             )
             
-            format_output(ohlcv_data, format_type=args.format, asset_class=asset_class)
+            if args.format == "table":
+                sink = StdoutSink(lambda data: format_ohlcv_table(data, asset_class))
+            elif args.format == "csv":
+                sink = CSVSink("output.csv")
+            else:
+                sink = StdoutSink(format_ohlcv_json)
+            sink.write(ohlcv_data)
             
             print("\n" + "=" * 80)
             print("STARTING REAL-TIME STREAMING")
@@ -1131,7 +1177,13 @@ Examples:
             timezone=args.timezone,
         )
         
-        format_output(ohlcv_data, format_type=args.format, asset_class=asset_class)
+        if args.format == "table":
+            sink = StdoutSink(lambda data: format_ohlcv_table(data, asset_class))
+        elif args.format == "csv":
+            sink = CSVSink("output.csv")
+        else:
+            sink = StdoutSink(format_ohlcv_json)
+        sink.write(ohlcv_data)
 
 
 if __name__ == "__main__":
