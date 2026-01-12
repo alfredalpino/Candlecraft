@@ -6,32 +6,77 @@ A production-ready, modular system for pulling OHLCV (Open, High, Low, Close, Vo
 
 **License:** Private Use Only - See [LICENSE](LICENSE) for details
 
+## ⚠️ Important: Recommended Interface
+
+**`pull_ohlcv.py` is the canonical and production-ready OHLCV interface for all asset classes.**
+
+This unified script automatically detects asset class (Cryptocurrency, Forex, or U.S. Equities) from symbol format and routes to the appropriate data provider. It is the **only script recommended for production use**.
+
+### Quick Start
+
+```bash
+# Cryptocurrency
+python pull_ohlcv.py --symbol BTCUSDT --timeframe 1h --limit 100
+
+# Forex
+python pull_ohlcv.py --symbol EUR/USD --timeframe 1h --limit 100
+
+# U.S. Equities
+python pull_ohlcv.py --symbol AAPL --timeframe 1h --limit 100
+
+# Real-time streaming
+python pull_ohlcv.py --symbol BTCUSDT --timeframe 1h --stream
+
+# Polling mode (Forex/Equities)
+python pull_ohlcv.py --symbol EUR/USD --timeframe 1m --limit 1 --poll
+```
+
+### ⚠️ Legacy Scripts Warning
+
+The following scripts are **legacy/development-only** and should **NOT be used in production**:
+
+- ❌ **`pull_fx.py`** - Legacy Forex script (use `pull_ohlcv.py` instead)
+- ❌ **`pull_us-eq.py`** - Legacy U.S. Equities script (use `pull_ohlcv.py` instead)
+- ❌ **`my_ohlcv.py`** - Experimental/development script (use `pull_ohlcv.py` instead)
+
+**These legacy files are retained only for:**
+- Debugging and reference purposes
+- Validation and testing
+- Historical code review
+
+**All new development must use `pull_ohlcv.py` as the baseline implementation.**
+
+---
+
 ## Table of Contents
 
+- [Recommended Interface](#-important-recommended-interface)
 - [Overview](#overview)
 - [Polling vs Streaming: Architectural Overview](#polling-vs-streaming-architectural-overview)
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [Usage by Asset Class](#usage-by-asset-class)
-  - [Cryptocurrency](#cryptocurrency-pull_cryptopy)
-  - [Forex](#forex-pull_fxpy)
-  - [U.S. Equities](#us-equities-pull_us-eqpy)
+  - [Cryptocurrency](#cryptocurrency)
+  - [Forex](#forex)
+  - [U.S. Equities](#us-equities)
 - [Supported Timeframes](#supported-timeframes)
 - [Output Formats](#output-formats)
 - [Rate Limiting](#rate-limiting)
 - [Troubleshooting](#troubleshooting)
+- [Legacy Scripts](#legacy-scripts)
 
 ---
 
 ## Overview
 
-This system provides three standalone data pullers, each optimized for its asset class:
+**`pull_ohlcv.py`** is the unified, production-ready interface that supports all asset classes:
 
-- **`pull_crypto.py`** - Cryptocurrency data from Binance (BTC, ETH, etc.)
-- **`pull_fx.py`** - Forex pairs from Twelve Data (EUR/USD, GBP/USD, etc.)
-- **`pull_us-eq.py`** - U.S. Equities from Twelve Data (AAPL, MSFT, TSLA, etc.)
+- ✅ **Cryptocurrency** - Binance (BTCUSDT, ETHUSDT, etc.)
+- ✅ **Forex** - Twelve Data (EUR/USD, GBP/USD, etc.)
+- ✅ **U.S. Equities** - Twelve Data (AAPL, MSFT, TSLA, etc.)
 
-Each script supports:
+The script automatically detects asset class from symbol format and provides:
+
 - ✅ Historical OHLCV data fetching (REST API)
 - ✅ Real-time data streaming (WebSocket)
 - ✅ Polling mode (REST API at fixed intervals)
@@ -39,10 +84,11 @@ Each script supports:
 - ✅ Flexible timeframes (1 minute to 1 month)
 - ✅ Date range queries
 - ✅ Timezone configuration
+- ✅ Asset-class-aware formatting
 
 ---
 
-## Polling vs Streaming: Architectural Overview
+<details><summary><h2>Polling vs Streaming: Architectural Overview ⚠️ Must Read</h2></summary>
 
 ### Polling (REST API)
 
@@ -152,13 +198,15 @@ Client receives updates in real-time
 **Command Pattern:**
 ```bash
 # Fetch 100 historical candles, then stream new ones
-python pull_crypto.py --symbol BTCUSDT --timeframe 1h --limit 100 --stream
+python pull_ohlcv.py --symbol BTCUSDT --timeframe 1h --limit 100 --stream
 ```
 
 This gives you:
 - Complete historical context
 - Real-time updates going forward
 - Best of both worlds
+
+</details>
 
 ---
 
@@ -308,40 +356,42 @@ TWELVEDATA_SECRET=4948hd84h1234567890abcdefghijklmnopqrstuvwxyz
 
 ## Usage by Asset Class
 
-### Cryptocurrency (pull_crypto.py)
+All examples use **`pull_ohlcv.py`**, the recommended production interface. The script automatically detects asset class from symbol format.
+
+### Cryptocurrency
 
 #### Historical Data (REST API)
 
 **Fetch last N candles:**
 ```bash
-python pull_crypto.py --symbol BTCUSDT --timeframe 1h --limit 100
+python pull_ohlcv.py --symbol BTCUSDT --timeframe 1h --limit 100
 ```
 
 **Fetch by date range:**
 ```bash
-python pull_crypto.py --symbol ETHUSDT --timeframe 1d --start 2024-01-01 --end 2024-01-31
+python pull_ohlcv.py --symbol ETHUSDT --timeframe 1d --start 2024-01-01 --end 2024-01-31
 ```
 
 **Output as CSV:**
 ```bash
-python pull_crypto.py --symbol BTCUSDT --timeframe 1h --limit 10 --format csv
+python pull_ohlcv.py --symbol BTCUSDT --timeframe 1h --limit 10 --format csv
 ```
 
 **Output as JSON:**
 ```bash
-python pull_crypto.py --symbol BTCUSDT --timeframe 1h --limit 10 --format json
+python pull_ohlcv.py --symbol BTCUSDT --timeframe 1h --limit 10 --format json
 ```
 
 #### Real-time Streaming (WebSocket)
 
 **Stream only (no historical):**
 ```bash
-python pull_crypto.py --symbol BTCUSDT --timeframe 1h --stream
+python pull_ohlcv.py --symbol BTCUSDT --timeframe 1h --stream
 ```
 
 **Fetch historical, then stream:**
 ```bash
-python pull_crypto.py --symbol BTCUSDT --timeframe 1h --limit 100 --stream
+python pull_ohlcv.py --symbol BTCUSDT --timeframe 1h --limit 100 --stream
 ```
 
 **Supported Symbols:**
@@ -349,42 +399,42 @@ python pull_crypto.py --symbol BTCUSDT --timeframe 1h --limit 100 --stream
 
 ---
 
-### Forex (pull_fx.py)
+### Forex
 
 #### Historical Data (REST API)
 
 **Fetch last N candles:**
 ```bash
-python pull_fx.py --symbol EUR/USD --timeframe 1h --limit 100
+python pull_ohlcv.py --symbol EUR/USD --timeframe 1h --limit 100
 ```
 
 **Fetch by date range:**
 ```bash
-python pull_fx.py --symbol GBP/USD --timeframe 1d --start 2024-01-01 --end 2024-01-31
+python pull_ohlcv.py --symbol GBP/USD --timeframe 1d --start 2024-01-01 --end 2024-01-31
 ```
 
 **With timezone (UTC):**
 ```bash
-python pull_fx.py --symbol EUR/USD --timeframe 1h --limit 10 --timezone UTC
+python pull_ohlcv.py --symbol EUR/USD --timeframe 1h --limit 10 --timezone UTC
 ```
 
 #### Real-time Streaming (WebSocket)
 
 **Stream only:**
 ```bash
-python pull_fx.py --symbol EUR/USD --stream
+python pull_ohlcv.py --symbol EUR/USD --stream
 ```
 
 **Historical + streaming:**
 ```bash
-python pull_fx.py --symbol EUR/USD --timeframe 1h --limit 10 --stream
+python pull_ohlcv.py --symbol EUR/USD --timeframe 1h --limit 10 --stream
 ```
 
 #### Polling Mode (1 call per minute)
 
 **Poll for latest candle every 60 seconds:**
 ```bash
-python pull_fx.py --symbol EUR/USD --timeframe 1m --limit 1 --poll
+python pull_ohlcv.py --symbol EUR/USD --timeframe 1m --limit 1 --poll
 ```
 
 **Note:** Forex symbols accept both `/` and `_` separators:
@@ -395,70 +445,70 @@ python pull_fx.py --symbol EUR/USD --timeframe 1m --limit 1 --poll
 
 ---
 
-### U.S. Equities (pull_us-eq.py)
+### U.S. Equities
 
 #### Historical Data (REST API)
 
 **Minute-level data (1-minute candles):**
 ```bash
 # Last 10 one-minute candles
-python pull_us-eq.py --symbol AAPL --timeframe 1m --limit 10
+python pull_ohlcv.py --symbol AAPL --timeframe 1m --limit 10
 
 # Last 100 one-minute candles
-python pull_us-eq.py --symbol AAPL --timeframe 1m --limit 100
+python pull_ohlcv.py --symbol AAPL --timeframe 1m --limit 100
 ```
 
 **5-minute candles:**
 ```bash
-python pull_us-eq.py --symbol AAPL --timeframe 5m --limit 50
+python pull_ohlcv.py --symbol AAPL --timeframe 5m --limit 50
 ```
 
 **15-minute candles:**
 ```bash
-python pull_us-eq.py --symbol AAPL --timeframe 15m --limit 30
+python pull_ohlcv.py --symbol AAPL --timeframe 15m --limit 30
 ```
 
 **30-minute candles:**
 ```bash
-python pull_us-eq.py --symbol AAPL --timeframe 30m --limit 20
+python pull_ohlcv.py --symbol AAPL --timeframe 30m --limit 20
 ```
 
 **Hourly candles:**
 ```bash
-python pull_us-eq.py --symbol AAPL --timeframe 1h --limit 100
+python pull_ohlcv.py --symbol AAPL --timeframe 1h --limit 100
 ```
 
 **4-hour candles:**
 ```bash
-python pull_us-eq.py --symbol AAPL --timeframe 4h --limit 50
+python pull_ohlcv.py --symbol AAPL --timeframe 4h --limit 50
 ```
 
 **Daily candles:**
 ```bash
 # Last 30 days
-python pull_us-eq.py --symbol AAPL --timeframe 1d --limit 30
+python pull_ohlcv.py --symbol AAPL --timeframe 1d --limit 30
 
 # Specific date range
-python pull_us-eq.py --symbol AAPL --timeframe 1d --start 2024-01-01 --end 2024-01-31
+python pull_ohlcv.py --symbol AAPL --timeframe 1d --start 2024-01-01 --end 2024-01-31
 ```
 
 **Weekly candles:**
 ```bash
-python pull_us-eq.py --symbol AAPL --timeframe 1w --limit 52
+python pull_ohlcv.py --symbol AAPL --timeframe 1w --limit 52
 ```
 
 **Monthly candles:**
 ```bash
-python pull_us-eq.py --symbol AAPL --timeframe 1M --limit 12
+python pull_ohlcv.py --symbol AAPL --timeframe 1M --limit 12
 ```
 
 **With timezone:**
 ```bash
 # UTC timezone
-python pull_us-eq.py --symbol AAPL --timeframe 1h --limit 10 --timezone UTC
+python pull_ohlcv.py --symbol AAPL --timeframe 1h --limit 10 --timezone UTC
 
 # Pacific timezone
-python pull_us-eq.py --symbol AAPL --timeframe 1h --limit 10 --timezone America/Los_Angeles
+python pull_ohlcv.py --symbol AAPL --timeframe 1h --limit 10 --timezone America/Los_Angeles
 
 # Default is America/New_York (US market time)
 ```
@@ -466,45 +516,45 @@ python pull_us-eq.py --symbol AAPL --timeframe 1h --limit 10 --timezone America/
 **Output formats:**
 ```bash
 # CSV format
-python pull_us-eq.py --symbol AAPL --timeframe 1d --limit 10 --format csv
+python pull_ohlcv.py --symbol AAPL --timeframe 1d --limit 10 --format csv
 
 # JSON format
-python pull_us-eq.py --symbol AAPL --timeframe 1d --limit 10 --format json
+python pull_ohlcv.py --symbol AAPL --timeframe 1d --limit 10 --format json
 ```
 
 #### Real-time Streaming (WebSocket)
 
 **Stream only:**
 ```bash
-python pull_us-eq.py --symbol AAPL --stream
+python pull_ohlcv.py --symbol AAPL --stream
 ```
 
 **Historical + streaming:**
 ```bash
 # Fetch last 100 hourly candles, then stream new ones
-python pull_us-eq.py --symbol AAPL --timeframe 1h --limit 100 --stream
+python pull_ohlcv.py --symbol AAPL --timeframe 1h --limit 100 --stream
 ```
 
 #### Polling Mode (1 call per minute)
 
 **Poll for latest 1-minute candle every 60 seconds:**
 ```bash
-python pull_us-eq.py --symbol AAPL --timeframe 1m --limit 1 --poll
+python pull_ohlcv.py --symbol AAPL --timeframe 1m --limit 1 --poll
 ```
 
 **Poll for latest 5-minute candle every 60 seconds:**
 ```bash
-python pull_us-eq.py --symbol AAPL --timeframe 5m --limit 1 --poll
+python pull_ohlcv.py --symbol AAPL --timeframe 5m --limit 1 --poll
 ```
 
 **Poll for latest hourly candle every 60 seconds:**
 ```bash
-python pull_us-eq.py --symbol AAPL --timeframe 1h --limit 1 --poll
+python pull_ohlcv.py --symbol AAPL --timeframe 1h --limit 1 --poll
 ```
 
 **Poll for latest daily candle every 60 seconds:**
 ```bash
-python pull_us-eq.py --symbol AAPL --timeframe 1d --limit 1 --poll
+python pull_ohlcv.py --symbol AAPL --timeframe 1d --limit 1 --poll
 ```
 
 **Supported Symbols:**
@@ -514,7 +564,7 @@ python pull_us-eq.py --symbol AAPL --timeframe 1d --limit 1 --poll
 
 ## Supported Timeframes
 
-All scripts support the following timeframes:
+`pull_ohlcv.py` supports the following timeframes:
 
 | Timeframe | Description | Example Use Case |
 |-----------|-------------|-----------------|
@@ -548,7 +598,7 @@ Timestamp                    Open         High          Low        Close        
 ### CSV Format
 
 ```bash
-python pull_us-eq.py --symbol AAPL --timeframe 1d --limit 5 --format csv
+python pull_ohlcv.py --symbol AAPL --timeframe 1d --limit 5 --format csv
 ```
 
 Output:
@@ -561,7 +611,7 @@ timestamp,open,high,low,close,volume
 ### JSON Format
 
 ```bash
-python pull_us-eq.py --symbol AAPL --timeframe 1d --limit 5 --format json
+python pull_ohlcv.py --symbol AAPL --timeframe 1d --limit 5 --format json
 ```
 
 Output:
@@ -604,8 +654,8 @@ Output:
 - **Automatic Rate Limiting**: Scripts automatically wait 60 seconds between REST API calls
 
 **Rate Limit Behavior:**
-- Scripts detect when rate limit is approaching
-- Automatically wait required time before next request
+- `pull_ohlcv.py` detects when rate limit is approaching
+- Automatically waits required time before next request
 - Display message: `⏳ Rate limit: Waiting X seconds before next request...`
 
 **Polling Mode:**
@@ -659,7 +709,7 @@ pip install -r requirements.txt
 #### 4. "Rate limit exceeded"
 
 **Solution:**
-- Scripts automatically handle rate limiting
+- `pull_ohlcv.py` automatically handles rate limiting
 - For manual requests, wait 60 seconds between calls
 - Use polling mode for automatic rate limit compliance
 
@@ -695,7 +745,7 @@ pip install -r requirements.txt
 ### Command Structure
 
 ```bash
-python <script> --symbol <SYMBOL> --timeframe <TF> [OPTIONS]
+python pull_ohlcv.py --symbol <SYMBOL> --timeframe <TF> [OPTIONS]
 ```
 
 ### Required Arguments
@@ -717,22 +767,22 @@ python <script> --symbol <SYMBOL> --timeframe <TF> [OPTIONS]
 
 **Backtesting (Historical Data):**
 ```bash
-python pull_us-eq.py --symbol AAPL --timeframe 1d --start 2024-01-01 --end 2024-12-31 --format csv > aapl_2024.csv
+python pull_ohlcv.py --symbol AAPL --timeframe 1d --start 2024-01-01 --end 2024-12-31 --format csv > aapl_2024.csv
 ```
 
 **Live Trading Bot (Historical + Streaming):**
 ```bash
-python pull_crypto.py --symbol BTCUSDT --timeframe 1h --limit 100 --stream
+python pull_ohlcv.py --symbol BTCUSDT --timeframe 1h --limit 100 --stream
 ```
 
 **Daily Data Collection (Polling):**
 ```bash
-python pull_us-eq.py --symbol AAPL --timeframe 1d --limit 1 --poll
+python pull_ohlcv.py --symbol AAPL --timeframe 1d --limit 1 --poll
 ```
 
 **Minute-level Analysis:**
 ```bash
-python pull_us-eq.py --symbol AAPL --timeframe 1m --limit 1000
+python pull_ohlcv.py --symbol AAPL --timeframe 1m --limit 1000
 ```
 
 ---
@@ -763,3 +813,41 @@ https://github.com/alfredalpino
 **Note:** This is a private repository. Contributions and pull requests are not accepted without explicit permission from the repository owner.
 
 For inquiries or permission requests, please contact AlfredAlpino.
+
+---
+
+## Legacy Scripts
+
+⚠️ **WARNING: The following scripts are legacy/development-only and should NOT be used in production.**
+
+### Legacy Files
+
+- **`pull_fx.py`** - Legacy Forex-specific script
+- **`pull_us-eq.py`** - Legacy U.S. Equities-specific script  
+- **`my_ohlcv.py`** - Experimental/development script
+
+### Why These Are Legacy
+
+These scripts are retained **only** for:
+- Debugging and reference purposes
+- Validation and testing against the canonical implementation
+- Historical code review
+
+### Migration Guide
+
+**All functionality is available in `pull_ohlcv.py`:**
+
+| Legacy Script | Replacement Command |
+|---------------|---------------------|
+| `pull_fx.py --symbol EUR/USD ...` | `pull_ohlcv.py --symbol EUR/USD ...` |
+| `pull_us-eq.py --symbol AAPL ...` | `pull_ohlcv.py --symbol AAPL ...` |
+| `my_ohlcv.py --symbol BTCUSDT ...` | `pull_ohlcv.py --symbol BTCUSDT ...` |
+
+### Production Policy
+
+- ❌ **DO NOT** use legacy scripts in production environments
+- ❌ **DO NOT** build new features on legacy scripts
+- ✅ **DO** use `pull_ohlcv.py` for all production deployments
+- ✅ **DO** use `pull_ohlcv.py` as the baseline for all new development
+
+**All new development must rely on `pull_ohlcv.py` as the foundation.**
