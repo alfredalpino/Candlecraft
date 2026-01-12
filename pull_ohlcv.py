@@ -91,6 +91,18 @@ def to_utc(ts: datetime) -> datetime:
     return ts.astimezone(timezone.utc)
 
 
+def validate_ohlcv(dp: OHLCV) -> None:
+    """Validate OHLCV data invariants. Raises ValueError on invalid data."""
+    if dp.high < dp.low:
+        raise ValueError("Invalid OHLCV: high < low")
+    if dp.high < max(dp.open, dp.close):
+        raise ValueError("Invalid OHLCV: high < open/close")
+    if dp.low > min(dp.open, dp.close):
+        raise ValueError("Invalid OHLCV: low > open/close")
+    if dp.open <= 0 or dp.close <= 0:
+        raise ValueError("Invalid OHLCV: non-positive price")
+
+
 # Rate limiting for Twelve Data
 _last_api_call_time = 0
 _rate_limit_delay = 60
@@ -294,7 +306,7 @@ def fetch_ohlcv_binance(
         
         ohlcv_data = []
         for kline in klines:
-            ohlcv_data.append(OHLCV(
+            ohlcv = OHLCV(
                 timestamp=to_utc(datetime.fromtimestamp(kline[0] / 1000)),
                 open=float(kline[1]),
                 high=float(kline[2]),
@@ -305,7 +317,9 @@ def fetch_ohlcv_binance(
                 timeframe=timeframe,
                 asset_class=AssetClass.CRYPTO,
                 source="binance",
-            ))
+            )
+            validate_ohlcv(ohlcv)
+            ohlcv_data.append(ohlcv)
         
         print(f"✓ Successfully fetched {len(ohlcv_data)} candles")
         return ohlcv_data
@@ -395,7 +409,7 @@ def fetch_ohlcv_twelvedata(
         for timestamp, row in df.iterrows():
             try:
                 ts = timestamp.to_pydatetime() if hasattr(timestamp, "to_pydatetime") else timestamp
-                ohlcv_data.append(OHLCV(
+                ohlcv = OHLCV(
                     timestamp=to_utc(ts),
                     open=float(row["open"]),
                     high=float(row["high"]),
@@ -406,7 +420,12 @@ def fetch_ohlcv_twelvedata(
                     timeframe=timeframe,
                     asset_class=asset_class,
                     source="twelvedata",
-                ))
+                )
+                validate_ohlcv(ohlcv)
+                ohlcv_data.append(ohlcv)
+            except ValueError:
+                # Validation errors must fail fast - do not suppress
+                raise
             except Exception as e:
                 print(f"⚠ Warning: Failed to process data point: {e}")
                 continue
@@ -500,6 +519,7 @@ def stream_realtime_binance(
                         asset_class=AssetClass.CRYPTO,
                         source="binance",
                     )
+                    validate_ohlcv(candle)
                     
                     if on_candle:
                         on_candle(candle)
