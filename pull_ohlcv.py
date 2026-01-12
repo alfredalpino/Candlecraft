@@ -32,6 +32,7 @@ import threading
 from datetime import datetime
 from typing import List, Optional, Dict, Any, Callable, Tuple
 from enum import Enum
+from dataclasses import dataclass
 
 # Load environment variables from .env file
 try:
@@ -66,6 +67,21 @@ class AssetClass(Enum):
     CRYPTO = "crypto"
     FOREX = "forex"
     EQUITY = "equity"
+
+
+@dataclass
+class OHLCV:
+    """Internal data model for OHLCV data."""
+    timestamp: datetime
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: Optional[float]
+    symbol: str
+    timeframe: str
+    asset_class: AssetClass
+    source: str
 
 
 # Rate limiting for Twelve Data
@@ -192,7 +208,7 @@ def fetch_ohlcv_binance(
     limit: Optional[int] = None,
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,
-) -> List[Dict[str, Any]]:
+) -> List[OHLCV]:
     """Fetch OHLCV data from Binance."""
     interval_map = {
         "1m": Client.KLINE_INTERVAL_1MINUTE,
@@ -271,14 +287,18 @@ def fetch_ohlcv_binance(
         
         ohlcv_data = []
         for kline in klines:
-            ohlcv_data.append({
-                "timestamp": datetime.fromtimestamp(kline[0] / 1000),
-                "open": float(kline[1]),
-                "high": float(kline[2]),
-                "low": float(kline[3]),
-                "close": float(kline[4]),
-                "volume": float(kline[5]),
-            })
+            ohlcv_data.append(OHLCV(
+                timestamp=datetime.fromtimestamp(kline[0] / 1000),
+                open=float(kline[1]),
+                high=float(kline[2]),
+                low=float(kline[3]),
+                close=float(kline[4]),
+                volume=float(kline[5]),
+                symbol=symbol_upper,
+                timeframe=timeframe,
+                asset_class=AssetClass.CRYPTO,
+                source="binance",
+            ))
         
         print(f"✓ Successfully fetched {len(ohlcv_data)} candles")
         return ohlcv_data
@@ -300,7 +320,7 @@ def fetch_ohlcv_twelvedata(
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,
     timezone: Optional[str] = None,
-) -> List[Dict[str, Any]]:
+) -> List[OHLCV]:
     """Fetch OHLCV data from Twelve Data."""
     interval_map = {
         "1m": "1min",
@@ -367,14 +387,18 @@ def fetch_ohlcv_twelvedata(
         ohlcv_data = []
         for timestamp, row in df.iterrows():
             try:
-                ohlcv_data.append({
-                    "timestamp": timestamp.to_pydatetime() if hasattr(timestamp, "to_pydatetime") else timestamp,
-                    "open": float(row["open"]),
-                    "high": float(row["high"]),
-                    "low": float(row["low"]),
-                    "close": float(row["close"]),
-                    "volume": float(row["volume"]) if "volume" in row else None,
-                })
+                ohlcv_data.append(OHLCV(
+                    timestamp=timestamp.to_pydatetime() if hasattr(timestamp, "to_pydatetime") else timestamp,
+                    open=float(row["open"]),
+                    high=float(row["high"]),
+                    low=float(row["low"]),
+                    close=float(row["close"]),
+                    volume=float(row["volume"]) if "volume" in row else None,
+                    symbol=symbol_normalized,
+                    timeframe=timeframe,
+                    asset_class=asset_class,
+                    source="twelvedata",
+                ))
             except Exception as e:
                 print(f"⚠ Warning: Failed to process data point: {e}")
                 continue
@@ -395,7 +419,7 @@ def fetch_ohlcv(
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,
     timezone: Optional[str] = None,
-) -> List[Dict[str, Any]]:
+) -> List[OHLCV]:
     """Unified function to fetch OHLCV data from appropriate provider."""
     if asset_class == AssetClass.CRYPTO:
         client = authenticate_binance()
@@ -410,7 +434,7 @@ def fetch_ohlcv(
 def stream_realtime_binance(
     symbol: str,
     timeframe: str,
-    on_candle: Optional[Callable[[Dict[str, Any]], None]] = None,
+    on_candle: Optional[Callable[[OHLCV], None]] = None,
     on_error: Optional[Callable[[Exception], None]] = None,
 ) -> None:
     """Stream real-time OHLCV kline data from Binance WebSocket."""
@@ -456,24 +480,28 @@ def stream_realtime_binance(
                 kline = data["k"]
                 
                 if kline.get("x", False):
-                    candle = {
-                        "timestamp": datetime.fromtimestamp(kline["t"] / 1000),
-                        "open": float(kline["o"]),
-                        "high": float(kline["h"]),
-                        "low": float(kline["l"]),
-                        "close": float(kline["c"]),
-                        "volume": float(kline["v"]),
-                    }
+                    candle = OHLCV(
+                        timestamp=datetime.fromtimestamp(kline["t"] / 1000),
+                        open=float(kline["o"]),
+                        high=float(kline["h"]),
+                        low=float(kline["l"]),
+                        close=float(kline["c"]),
+                        volume=float(kline["v"]),
+                        symbol=symbol.upper(),
+                        timeframe=timeframe,
+                        asset_class=AssetClass.CRYPTO,
+                        source="binance",
+                    )
                     
                     if on_candle:
                         on_candle(candle)
                     else:
-                        timestamp_str = candle["timestamp"].strftime("%Y-%m-%d %H:%M:%S")
+                        timestamp_str = candle.timestamp.strftime("%Y-%m-%d %H:%M:%S")
                         print(
-                            f"[{timestamp_str}] {symbol.upper()} {timeframe}: "
-                            f"O={candle['open']:.8f} H={candle['high']:.8f} "
-                            f"L={candle['low']:.8f} C={candle['close']:.8f} "
-                            f"V={candle['volume']:.8f}"
+                            f"[{timestamp_str}] {candle.symbol} {candle.timeframe}: "
+                            f"O={candle.open:.8f} H={candle.high:.8f} "
+                            f"L={candle.low:.8f} C={candle.close:.8f} "
+                            f"V={candle.volume:.8f}"
                         )
         
         except json.JSONDecodeError as e:
@@ -718,7 +746,7 @@ def stream_realtime_twelvedata(
 
 
 def format_output(
-    ohlcv_data: List[Dict[str, Any]],
+    ohlcv_data: List[OHLCV],
     format_type: str = "table",
     asset_class: AssetClass = AssetClass.CRYPTO
 ) -> None:
@@ -726,7 +754,7 @@ def format_output(
     Format and display OHLCV data with asset-class-aware formatting.
     
     Args:
-        ohlcv_data: List of OHLCV dictionaries
+        ohlcv_data: List of OHLCV objects
         format_type: Output format ('table', 'csv', 'json')
         asset_class: Asset class for formatting (crypto: 8 decimals, forex: 5, equity: 2 with $)
     """
@@ -736,26 +764,26 @@ def format_output(
         print("=" * 100)
         
         for candle in ohlcv_data:
-            timestamp_str = candle["timestamp"].strftime("%Y-%m-%d %H:%M:%S")
+            timestamp_str = candle.timestamp.strftime("%Y-%m-%d %H:%M:%S")
             
             if asset_class == AssetClass.EQUITY:
-                open_str = f"${candle['open']:>10.2f}"
-                high_str = f"${candle['high']:>10.2f}"
-                low_str = f"${candle['low']:>10.2f}"
-                close_str = f"${candle['close']:>10.2f}"
-                volume_str = f"{candle['volume']:>20,.0f}" if candle.get("volume") else " " * 20
+                open_str = f"${candle.open:>10.2f}"
+                high_str = f"${candle.high:>10.2f}"
+                low_str = f"${candle.low:>10.2f}"
+                close_str = f"${candle.close:>10.2f}"
+                volume_str = f"{candle.volume:>20,.0f}" if candle.volume else " " * 20
             elif asset_class == AssetClass.FOREX:
-                open_str = f"{candle['open']:>12.5f}"
-                high_str = f"{candle['high']:>12.5f}"
-                low_str = f"{candle['low']:>12.5f}"
-                close_str = f"{candle['close']:>12.5f}"
-                volume_str = f"{candle['volume']:>20.8f}" if candle.get("volume") else " " * 20
+                open_str = f"{candle.open:>12.5f}"
+                high_str = f"{candle.high:>12.5f}"
+                low_str = f"{candle.low:>12.5f}"
+                close_str = f"{candle.close:>12.5f}"
+                volume_str = f"{candle.volume:>20.8f}" if candle.volume else " " * 20
             else:  # CRYPTO
-                open_str = f"{candle['open']:>12.8f}"
-                high_str = f"{candle['high']:>12.8f}"
-                low_str = f"{candle['low']:>12.8f}"
-                close_str = f"{candle['close']:>12.8f}"
-                volume_str = f"{candle['volume']:>20.8f}" if candle.get("volume") else " " * 20
+                open_str = f"{candle.open:>12.8f}"
+                high_str = f"{candle.high:>12.8f}"
+                low_str = f"{candle.low:>12.8f}"
+                close_str = f"{candle.close:>12.8f}"
+                volume_str = f"{candle.volume:>20.8f}" if candle.volume else " " * 20
             
             print(
                 f"{timestamp_str:<20} "
@@ -771,21 +799,21 @@ def format_output(
     elif format_type == "csv":
         print("timestamp,open,high,low,close,volume")
         for candle in ohlcv_data:
-            timestamp_str = candle["timestamp"].strftime("%Y-%m-%d %H:%M:%S")
+            timestamp_str = candle.timestamp.strftime("%Y-%m-%d %H:%M:%S")
             
             if asset_class == AssetClass.EQUITY:
-                volume_str = str(int(candle.get("volume", 0))) if candle.get("volume") else ""
+                volume_str = str(int(candle.volume)) if candle.volume else ""
             elif asset_class == AssetClass.FOREX:
-                volume_str = str(candle.get("volume", "")) if candle.get("volume") else ""
+                volume_str = str(candle.volume) if candle.volume else ""
             else:  # CRYPTO
-                volume_str = str(candle.get("volume", "")) if candle.get("volume") else ""
+                volume_str = str(candle.volume) if candle.volume else ""
             
             print(
                 f"{timestamp_str},"
-                f"{candle['open']},"
-                f"{candle['high']},"
-                f"{candle['low']},"
-                f"{candle['close']},"
+                f"{candle.open},"
+                f"{candle.high},"
+                f"{candle.low},"
+                f"{candle.close},"
                 f"{volume_str}"
             )
     
@@ -793,12 +821,12 @@ def format_output(
         output = []
         for candle in ohlcv_data:
             output.append({
-                "timestamp": candle["timestamp"].isoformat(),
-                "open": candle["open"],
-                "high": candle["high"],
-                "low": candle["low"],
-                "close": candle["close"],
-                "volume": candle.get("volume"),
+                "timestamp": candle.timestamp.isoformat(),
+                "open": candle.open,
+                "high": candle.high,
+                "low": candle.low,
+                "close": candle.close,
+                "volume": candle.volume,
             })
         print(json.dumps(output, indent=2))
 
@@ -1020,13 +1048,13 @@ Examples:
                 print("✗ --timeframe is required for crypto streaming")
                 sys.exit(1)
             
-            def on_new_candle(candle: Dict[str, Any]):
-                timestamp_str = candle["timestamp"].strftime("%Y-%m-%d %H:%M:%S")
+            def on_new_candle(candle: OHLCV):
+                timestamp_str = candle.timestamp.strftime("%Y-%m-%d %H:%M:%S")
                 print(
-                    f"[{timestamp_str}] {args.symbol.upper()} {args.timeframe}: "
-                    f"O={candle['open']:.8f} H={candle['high']:.8f} "
-                    f"L={candle['low']:.8f} C={candle['close']:.8f} "
-                    f"V={candle['volume']:.8f}"
+                    f"[{timestamp_str}] {candle.symbol} {candle.timeframe}: "
+                    f"O={candle.open:.8f} H={candle.high:.8f} "
+                    f"L={candle.low:.8f} C={candle.close:.8f} "
+                    f"V={candle.volume:.8f}"
                 )
             
             def on_error_handler(error: Exception):
