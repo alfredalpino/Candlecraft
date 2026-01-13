@@ -1,76 +1,21 @@
-PRIVATE USE LICENSE
+MIT License
 
 Copyright (c) 2026 AlfredAlpino
 
-All rights reserved.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-NOTICE: This software and associated documentation files (the "Software") are the 
-private property of AlfredAlpino. This Software is provided for private use only 
-and is not intended for public distribution, modification, or use by any third party.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-TERMS AND CONDITIONS:
-
-1. PRIVATE USE ONLY
-   This Software is licensed, not sold, to you by AlfredAlpino for your private 
-   use only. You may use this Software solely for your personal or internal 
-   business purposes.
-
-2. RESTRICTIONS
-   You are expressly prohibited from:
-   a) Copying, modifying, adapting, or creating derivative works of this Software
-   b) Distributing, sublicensing, leasing, renting, or otherwise transferring 
-      this Software to any third party
-   c) Using this Software for commercial purposes without explicit written 
-      permission from AlfredAlpino
-   d) Reverse engineering, decompiling, or disassembling this Software
-   e) Removing or altering any copyright, trademark, or other proprietary notices
-   f) Using this Software in any way that violates applicable laws or regulations
-
-3. NO WARRANTY
-   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
-   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
-   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL 
-   ALFREDALPINO BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN 
-   AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION 
-   WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-4. PERMISSION REQUIRED
-   Any use of this Software beyond the scope of private use, including but not 
-   limited to:
-   - Public distribution
-   - Commercial use
-   - Integration into other projects
-   - Forking or copying to other repositories
-   - Sharing with third parties
-   
-   Requires explicit written permission from AlfredAlpino. To request permission, 
-   please contact the repository owner.
-
-5. INTELLECTUAL PROPERTY
-   All intellectual property rights in and to the Software, including but not 
-   limited to copyrights, trademarks, trade secrets, and patents, are and shall 
-   remain the exclusive property of AlfredAlpino.
-
-6. TERMINATION
-   This license is effective until terminated. Your rights under this license 
-   will terminate automatically without notice if you fail to comply with any 
-   of its terms. Upon termination, you must destroy all copies of the Software 
-   in your possession.
-
-7. GOVERNING LAW
-   This license shall be governed by and construed in accordance with applicable 
-   laws, without regard to its conflict of law provisions.
-
-8. ENTIRE AGREEMENT
-   This license constitutes the entire agreement between you and AlfredAlpino 
-   regarding the use of the Software and supersedes all prior or contemporaneous 
-   understandings, agreements, representations, and warranties.
-
-By using this Software, you acknowledge that you have read this license, understand 
-it, and agree to be bound by its terms and conditions. If you do not agree to 
-these terms, you must not use this Software.
-
-For permission requests or inquiries, please contact the repository owner at:
-https://github.com/alfredalpino
-
-Last Updated: January 2026
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

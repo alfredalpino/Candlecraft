@@ -4,7 +4,7 @@ A production-ready, modular system for pulling OHLCV (Open, High, Low, Close, Vo
 
 **Repository:** https://github.com/alfredalpino/Data-Puller-AiO
 
-**License:** Private Use Only - See [LICENSE](LICENSE) for details
+**License:** MIT License - See [LICENSE](LICENSE) for details
 
 ## ⚠️ Important: Recommended Interface
 
@@ -789,30 +789,36 @@ python pull_ohlcv.py --symbol AAPL --timeframe 1m --limit 1000
 
 ## License
 
-**PRIVATE USE LICENSE**
+This project is open-source and licensed under the **MIT License**.
 
-This software is the private property of AlfredAlpino and is provided for private use only.
-
-**IMPORTANT:** This code is NOT allowed to be used, copied, modified, distributed, or shared without explicit written permission from AlfredAlpino.
+**MIT License Terms:**
+- ✅ **Free to use** - Use the software for any purpose, including commercial use
+- ✅ **Free to modify** - Modify the software to suit your needs
+- ✅ **Free to distribute** - Share and distribute the software
+- ✅ **Free to sublicense** - Include in your own projects
+- ⚠️ **No warranty** - The software is provided "as is" without warranty
+- 📝 **Attribution** - Include the original copyright notice and license
 
 For full license terms, please see the [LICENSE](LICENSE) file in this repository.
 
-**Key Restrictions:**
-- ❌ No public distribution
-- ❌ No commercial use without permission
-- ❌ No copying or forking to other repositories
-- ❌ No sharing with third parties
-- ✅ Private use only (personal/internal use)
-
-**Permission Requests:**
-To request permission for any use beyond private use, please contact the repository owner at:
-https://github.com/alfredalpino
+**What this means:**
+- You can use this software in commercial projects
+- You can modify and adapt it for your needs
+- You can fork and share it with others
+- You can include it in your own projects
+- You must include the MIT License and copyright notice
 
 ## Contributing
 
-**Note:** This is a private repository. Contributions and pull requests are not accepted without explicit permission from the repository owner.
+Contributions are welcome! This is an open-source project under the MIT License.
 
-For inquiries or permission requests, please contact AlfredAlpino.
+Feel free to:
+- Submit bug reports
+- Suggest new features
+- Submit pull requests
+- Improve documentation
+
+For questions or discussions, please open an issue on GitHub.
 
 ---
 
