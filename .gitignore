@@ -56,7 +56,7 @@ data/
 *.parquet
 .env.backup
 .env.example
-/Future-Plans/*
+Future-Plans/
 
 # Test results
 test-results/
