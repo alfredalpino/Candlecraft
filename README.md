@@ -1,18 +1,15 @@
 # Data Puller All-in-One
 
-A production-ready, modular system for pulling OHLCV (Open, High, Low, Close, Volume) data from multiple asset classes: **Cryptocurrency**, **Forex**, and **U.S. Equities**.
+A production-ready system for pulling OHLCV data from Cryptocurrency, Forex, and U.S. Equities markets.
 
-**Repository:** https://github.com/alfredalpino/Data-Puller-AiO
-
+**Repository:** https://github.com/alfredalpino/Data-Puller-AiO  
 **License:** MIT License - See [LICENSE](LICENSE) for details
 
-## ⚠️ Important: Recommended Interface
+## Production Interface
 
-**`pull_ohlcv.py` is the canonical and production-ready OHLCV interface for all asset classes.**
+**`pull_ohlcv.py` is the canonical production interface for all asset classes.** The script automatically detects asset class from symbol format and routes to the appropriate data provider.
 
-This unified script automatically detects asset class (Cryptocurrency, Forex, or U.S. Equities) from symbol format and routes to the appropriate data provider. It is the **only script recommended for production use**.
-
-### Quick Start
+## Quick Start
 
 ```bash
 # Cryptocurrency
@@ -31,829 +28,145 @@ python pull_ohlcv.py --symbol BTCUSDT --timeframe 1h --stream
 python pull_ohlcv.py --symbol EUR/USD --timeframe 1m --limit 1 --poll
 ```
 
-### ⚠️ Legacy Scripts Warning
-
-The following scripts are **legacy/development-only** and should **NOT be used in production**:
-
-- ❌ **`pull_fx.py`** - Legacy Forex script (use `pull_ohlcv.py` instead)
-- ❌ **`pull_us-eq.py`** - Legacy U.S. Equities script (use `pull_ohlcv.py` instead)
-- ❌ **`my_ohlcv.py`** - Experimental/development script (use `pull_ohlcv.py` instead)
-
-**These legacy files are retained only for:**
-- Debugging and reference purposes
-- Validation and testing
-- Historical code review
-
-**All new development must use `pull_ohlcv.py` as the baseline implementation.**
-
----
-
-## Table of Contents
-
-- [Recommended Interface](#-important-recommended-interface)
-- [Overview](#overview)
-- [Polling vs Streaming: Architectural Overview](#polling-vs-streaming-architectural-overview)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Usage by Asset Class](#usage-by-asset-class)
-  - [Cryptocurrency](#cryptocurrency)
-  - [Forex](#forex)
-  - [U.S. Equities](#us-equities)
-- [Supported Timeframes](#supported-timeframes)
-- [Output Formats](#output-formats)
-- [Rate Limiting](#rate-limiting)
-- [Troubleshooting](#troubleshooting)
-- [Legacy Scripts](#legacy-scripts)
-
----
-
-## Overview
-
-**`pull_ohlcv.py`** is the unified, production-ready interface that supports all asset classes:
-
-- ✅ **Cryptocurrency** - Binance (BTCUSDT, ETHUSDT, etc.)
-- ✅ **Forex** - Twelve Data (EUR/USD, GBP/USD, etc.)
-- ✅ **U.S. Equities** - Twelve Data (AAPL, MSFT, TSLA, etc.)
-
-The script automatically detects asset class from symbol format and provides:
-
-- ✅ Historical OHLCV data fetching (REST API)
-- ✅ Real-time data streaming (WebSocket)
-- ✅ Polling mode (REST API at fixed intervals)
-- ✅ Multiple output formats (table, CSV, JSON)
-- ✅ Flexible timeframes (1 minute to 1 month)
-- ✅ Date range queries
-- ✅ Timezone configuration
-- ✅ Asset-class-aware formatting
-
----
-
-<details><summary><h2>Polling vs Streaming: Architectural Overview ⚠️ Must Read</h2></summary>
-
-### Polling (REST API)
-
-**What it is:**
-Polling repeatedly requests data from a REST API at fixed intervals (e.g., every 60 seconds). The client initiates each request, waits for a response, processes it, then waits before the next request.
-
-**Architecture:**
-```
-Client → [Request] → API Server → [Response] → Client
-         (wait 60s)
-Client → [Request] → API Server → [Response] → Client
-         (wait 60s)
-... (repeats)
-```
-
-**Trade-offs:**
-
-**Advantages:**
-- ✅ **Simple Implementation**: Standard HTTP requests, easy to debug
-- ✅ **Reliable**: Each request is independent; failures don't cascade
-- ✅ **Rate Limit Friendly**: Predictable API usage, easy to control
-- ✅ **Works on Free Tiers**: No special WebSocket access required
-- ✅ **OHLCV Candles**: Gets complete, closed candles directly
-- ✅ **Stateless**: No connection management needed
-- ✅ **Firewall Friendly**: Uses standard HTTP/HTTPS ports
-
-**Disadvantages:**
-- ❌ **Higher Latency**: Data arrives only at polling intervals (e.g., 60s delay)
-- ❌ **Inefficient**: Makes requests even when no new data exists
-- ❌ **Rate Limit Constraints**: Limited by API call frequency (1/min on free tier)
-- ❌ **Resource Usage**: Each request has HTTP overhead
-- ❌ **Not Real-time**: Data is delayed by polling interval
-
-**When to Use Polling:**
-- Free tier API access with strict rate limits
-- Non-critical applications where 60-second delay is acceptable
-- Simple scripts that need OHLCV candles (not tick data)
-- Batch data collection for analysis
-- When WebSocket access is unavailable or unreliable
-
-**Example Use Cases:**
-- Daily portfolio value updates
-- End-of-day data collection
-- Historical data backfilling
-- Low-frequency trading signals
-
----
-
-### Streaming (WebSocket)
-
-**What it is:**
-Streaming maintains a persistent, bidirectional connection (WebSocket) with the data provider. The server pushes new data to the client immediately when it becomes available, without waiting for requests.
-
-**Architecture:**
-```
-Client ←→ [WebSocket Connection] ←→ Server
-         (persistent connection)
-         ↓ (server pushes data)
-Client receives updates in real-time
-```
-
-**Trade-offs:**
-
-**Advantages:**
-- ✅ **Low Latency**: Data arrives immediately (milliseconds, not seconds)
-- ✅ **Efficient**: No unnecessary requests; server pushes only new data
-- ✅ **Real-time**: True real-time updates for live trading
-- ✅ **Lower API Usage**: Doesn't count against REST API rate limits (separate quota)
-- ✅ **Continuous Updates**: Receives every price tick or candle update
-
-**Disadvantages:**
-- ❌ **Complex Implementation**: Requires connection management, reconnection logic
-- ❌ **Connection Overhead**: Must maintain persistent connection (heartbeats, ping/pong)
-- ❌ **Stateful**: Connection state must be managed
-- ❌ **May Require Paid Plans**: Free tiers often have limited WebSocket access
-- ❌ **Firewall Issues**: Some networks block WebSocket connections
-- ❌ **Price Data Only**: Often provides prices, not complete OHLCV candles
-- ❌ **Unstable on Free Tiers**: Subscriptions may fail for some symbols
-
-**When to Use Streaming:**
-- Real-time trading bots requiring immediate price updates
-- Live monitoring dashboards
-- High-frequency data collection
-- When latency is critical (< 1 second)
-- Paid API plans with WebSocket access
-
-**Example Use Cases:**
-- Live trading signal generation
-- Real-time portfolio monitoring
-- High-frequency algorithmic trading
-- Live price alerts
-
----
-
-### Hybrid Approach (Recommended)
-
-**Best Practice:**
-1. **Fetch Historical Data First** (REST API polling)
-   - Get last N candles for context
-   - Backfill missing data
-   - Initialize your system state
-
-2. **Switch to Streaming** (WebSocket)
-   - Receive new updates in real-time
-   - Maintain continuity with historical data
-
-**Command Pattern:**
-```bash
-# Fetch 100 historical candles, then stream new ones
-python pull_ohlcv.py --symbol BTCUSDT --timeframe 1h --limit 100 --stream
-```
-
-This gives you:
-- Complete historical context
-- Real-time updates going forward
-- Best of both worlds
-
-</details>
-
----
-
 ## Installation
-
-### Prerequisites
-
-- Python 3.10 or higher
-- pip (Python package manager)
-- API keys (see [Configuration](#configuration))
-
-### Step 1: Clone Repository
 
 ```bash
 git clone https://github.com/alfredalpino/Data-Puller-AiO.git
 cd Data-Puller-AiO
-```
-
-### Step 2: Create Virtual Environment
-
-```bash
-# Create virtual environment
 python -m venv dpa
-
-# Activate virtual environment
-# On macOS/Linux:
-source dpa/bin/activate
-
-# On Windows:
-dpa\Scripts\activate
-```
-
-### Step 3: Install Dependencies
-
-```bash
+source dpa/bin/activate  # On Windows: dpa\Scripts\activate
 pip install -r requirements.txt
 ```
 
-**Required packages:**
-- `python-binance` - Binance API client
-- `twelvedata` - Twelve Data API client
-- `websocket-client` - WebSocket support
-- `python-dotenv` - Environment variable management
-- `pandas` - Data processing
-
----
-
 ## Configuration
 
-### Environment Variables
-
-#### Quick Setup
-
-1. **Copy the template file:**
-   ```bash
-   cp .env.template .env
-   ```
-
-2. **Edit `.env` with your actual API keys:**
-   ```bash
-   # Open .env in your editor
-   nano .env
-   # or
-   code .env
-   ```
-
-#### Environment Variables Template
-
-The project includes a `.env.template` file with the following structure:
+Create a `.env` file in the project root:
 
 ```bash
-# .env file structure
-
 # Binance API (Optional - for higher rate limits)
 BINANCE_API_KEY=your_binance_api_key_here
 BINANCE_API_SECRET=your_binance_api_secret_here
 BINANCE_TESTNET=false
 
-#-------------
 # Twelve Data API (Required for Forex and US Equities)
 TWELVEDATA_SECRET=your_twelvedata_api_key_here
 ```
 
-**Example `.env` file:**
-```bash
-# Binance API (Optional - for higher rate limits)
-BINANCE_API_KEY=D0OM70wj0DWnTlAhtCckicg8oDnWOmSdVrWCrhL6hi4654sX2wtPkroGCXadAKzk
-BINANCE_API_SECRET=jbdkjbnd1234567890abcdefghijklmnopqrstuvwxyz
-BINANCE_TESTNET=false
+**API Keys:**
+- **Binance**: [API Management](https://www.binance.com/en/my/settings/api-management) (optional, works without keys for public data)
+- **Twelve Data**: [Sign up](https://twelvedata.com/) (required for Forex/Equities)
 
-#-------------
-# Twelve Data API (Required for Forex and US Equities)
-TWELVEDATA_SECRET=4948hd84h1234567890abcdefghijklmnopqrstuvwxyz
-```
+## Supported Asset Classes
 
-**Important Security Notes:**
-- ✅ The `.env` file is automatically ignored by git (in `.gitignore`)
-- ✅ Never commit your `.env` file to version control
-- ✅ Keep your API keys secure and private
-- ✅ You can create a `.env.backup` file for local backup (also gitignored)
+| Asset Class | Provider | Example Symbols |
+|-------------|----------|-----------------|
+| Cryptocurrency | Binance | BTCUSDT, ETHUSDT, BNBUSDT |
+| Forex | Twelve Data | EUR/USD, GBP/USD, USD/JPY |
+| U.S. Equities | Twelve Data | AAPL, MSFT, TSLA, GOOGL |
 
-### Getting API Keys
+## Usage
 
-#### Binance API Key (Optional)
-1. Visit [Binance API Management](https://www.binance.com/en/my/settings/api-management)
-2. Create API key (read-only permissions sufficient)
-3. Copy API key and secret to `.env` file
-
-**Note:** Binance scripts work without API keys for public data, but rate limits are lower.
-
-#### Twelve Data API Key (Required)
-1. Visit [Twelve Data](https://twelvedata.com/)
-2. Sign up for free account
-3. Navigate to API Keys section
-4. Copy API key to `.env` file as `TWELVEDATA_SECRET`
-
-**Free Tier Limits:**
-- 1 REST API request per minute
-- Limited WebSocket access (may require paid plan for some symbols)
-
-### Environment File Backup
-
-For your convenience, you can create a backup of your `.env` file:
+### Historical Data
 
 ```bash
-# Create a backup (already gitignored)
-cp .env .env.backup
-```
-
-**Backup File Structure:**
-```bash
-# .env.backup example
-
-# Binance API (Optional - for higher rate limits)
-BINANCE_API_KEY=D0OM70wj0DWnTlAhtCckicg8oDnWOmSdVrWCrhL6hi4654sX2wtPkroGCXadAKzk
-BINANCE_API_SECRET=jbdkjbnd1234567890abcdefghijklmnopqrstuvwxyz
-BINANCE_TESTNET=false
-
-#-------------
-# Twelve Data API (Required for Forex and US Equities)
-TWELVEDATA_SECRET=4948hd84h1234567890abcdefghijklmnopqrstuvwxyz
-```
-
-**Note:** Both `.env` and `.env.backup` are automatically excluded from git commits for security.
-
----
-
-## Usage by Asset Class
-
-All examples use **`pull_ohlcv.py`**, the recommended production interface. The script automatically detects asset class from symbol format.
-
-### Cryptocurrency
-
-#### Historical Data (REST API)
-
-**Fetch last N candles:**
-```bash
+# Fetch last N candles
 python pull_ohlcv.py --symbol BTCUSDT --timeframe 1h --limit 100
-```
 
-**Fetch by date range:**
-```bash
-python pull_ohlcv.py --symbol ETHUSDT --timeframe 1d --start 2024-01-01 --end 2024-01-31
-```
+# Fetch by date range
+python pull_ohlcv.py --symbol AAPL --timeframe 1d --start 2024-01-01 --end 2024-01-31
 
-**Output as CSV:**
-```bash
+# Output formats
 python pull_ohlcv.py --symbol BTCUSDT --timeframe 1h --limit 10 --format csv
-```
-
-**Output as JSON:**
-```bash
 python pull_ohlcv.py --symbol BTCUSDT --timeframe 1h --limit 10 --format json
 ```
 
-#### Real-time Streaming (WebSocket)
+### Real-time Streaming
 
-**Stream only (no historical):**
 ```bash
+# Stream only
 python pull_ohlcv.py --symbol BTCUSDT --timeframe 1h --stream
-```
 
-**Fetch historical, then stream:**
-```bash
+# Fetch historical, then stream
 python pull_ohlcv.py --symbol BTCUSDT --timeframe 1h --limit 100 --stream
 ```
 
-**Supported Symbols:**
-- `BTCUSDT`, `ETHUSDT`, `BNBUSDT`, `ADAUSDT`, `SOLUSDT`, and all Binance trading pairs
+### Polling Mode (Forex/Equities)
 
----
-
-### Forex
-
-#### Historical Data (REST API)
-
-**Fetch last N candles:**
 ```bash
-python pull_ohlcv.py --symbol EUR/USD --timeframe 1h --limit 100
-```
-
-**Fetch by date range:**
-```bash
-python pull_ohlcv.py --symbol GBP/USD --timeframe 1d --start 2024-01-01 --end 2024-01-31
-```
-
-**With timezone (UTC):**
-```bash
-python pull_ohlcv.py --symbol EUR/USD --timeframe 1h --limit 10 --timezone UTC
-```
-
-#### Real-time Streaming (WebSocket)
-
-**Stream only:**
-```bash
-python pull_ohlcv.py --symbol EUR/USD --stream
-```
-
-**Historical + streaming:**
-```bash
-python pull_ohlcv.py --symbol EUR/USD --timeframe 1h --limit 10 --stream
-```
-
-#### Polling Mode (1 call per minute)
-
-**Poll for latest candle every 60 seconds:**
-```bash
+# Poll for latest candle every 60 seconds
 python pull_ohlcv.py --symbol EUR/USD --timeframe 1m --limit 1 --poll
 ```
 
-**Note:** Forex symbols accept both `/` and `_` separators:
-- `EUR/USD` or `EUR_USD` (both work)
-
-**Supported Symbols:**
-- `EUR/USD`, `GBP/USD`, `USD/JPY`, `AUD/USD`, `USD/CAD`, and all major forex pairs
-
----
-
-### U.S. Equities
-
-#### Historical Data (REST API)
-
-**Minute-level data (1-minute candles):**
-```bash
-# Last 10 one-minute candles
-python pull_ohlcv.py --symbol AAPL --timeframe 1m --limit 10
-
-# Last 100 one-minute candles
-python pull_ohlcv.py --symbol AAPL --timeframe 1m --limit 100
-```
-
-**5-minute candles:**
-```bash
-python pull_ohlcv.py --symbol AAPL --timeframe 5m --limit 50
-```
-
-**15-minute candles:**
-```bash
-python pull_ohlcv.py --symbol AAPL --timeframe 15m --limit 30
-```
-
-**30-minute candles:**
-```bash
-python pull_ohlcv.py --symbol AAPL --timeframe 30m --limit 20
-```
-
-**Hourly candles:**
-```bash
-python pull_ohlcv.py --symbol AAPL --timeframe 1h --limit 100
-```
-
-**4-hour candles:**
-```bash
-python pull_ohlcv.py --symbol AAPL --timeframe 4h --limit 50
-```
-
-**Daily candles:**
-```bash
-# Last 30 days
-python pull_ohlcv.py --symbol AAPL --timeframe 1d --limit 30
-
-# Specific date range
-python pull_ohlcv.py --symbol AAPL --timeframe 1d --start 2024-01-01 --end 2024-01-31
-```
-
-**Weekly candles:**
-```bash
-python pull_ohlcv.py --symbol AAPL --timeframe 1w --limit 52
-```
-
-**Monthly candles:**
-```bash
-python pull_ohlcv.py --symbol AAPL --timeframe 1M --limit 12
-```
-
-**With timezone:**
-```bash
-# UTC timezone
-python pull_ohlcv.py --symbol AAPL --timeframe 1h --limit 10 --timezone UTC
-
-# Pacific timezone
-python pull_ohlcv.py --symbol AAPL --timeframe 1h --limit 10 --timezone America/Los_Angeles
-
-# Default is America/New_York (US market time)
-```
-
-**Output formats:**
-```bash
-# CSV format
-python pull_ohlcv.py --symbol AAPL --timeframe 1d --limit 10 --format csv
-
-# JSON format
-python pull_ohlcv.py --symbol AAPL --timeframe 1d --limit 10 --format json
-```
-
-#### Real-time Streaming (WebSocket)
-
-**Stream only:**
-```bash
-python pull_ohlcv.py --symbol AAPL --stream
-```
-
-**Historical + streaming:**
-```bash
-# Fetch last 100 hourly candles, then stream new ones
-python pull_ohlcv.py --symbol AAPL --timeframe 1h --limit 100 --stream
-```
-
-#### Polling Mode (1 call per minute)
-
-**Poll for latest 1-minute candle every 60 seconds:**
-```bash
-python pull_ohlcv.py --symbol AAPL --timeframe 1m --limit 1 --poll
-```
-
-**Poll for latest 5-minute candle every 60 seconds:**
-```bash
-python pull_ohlcv.py --symbol AAPL --timeframe 5m --limit 1 --poll
-```
-
-**Poll for latest hourly candle every 60 seconds:**
-```bash
-python pull_ohlcv.py --symbol AAPL --timeframe 1h --limit 1 --poll
-```
-
-**Poll for latest daily candle every 60 seconds:**
-```bash
-python pull_ohlcv.py --symbol AAPL --timeframe 1d --limit 1 --poll
-```
-
-**Supported Symbols:**
-- `AAPL` (Apple), `MSFT` (Microsoft), `TSLA` (Tesla), `GOOGL` (Alphabet), `AMZN` (Amazon), `META` (Meta), and all US-listed stocks
-
----
-
 ## Supported Timeframes
 
-`pull_ohlcv.py` supports the following timeframes:
-
-| Timeframe | Description | Example Use Case |
-|-----------|-------------|-----------------|
-| `1m` | 1 minute | Intraday trading, scalping |
-| `5m` | 5 minutes | Short-term trading, minute-level analysis |
-| `15m` | 15 minutes | Intraday swing trading |
-| `30m` | 30 minutes | Medium-term intraday analysis |
-| `1h` | 1 hour | Hourly trend analysis |
-| `4h` | 4 hours | Multi-hour patterns |
-| `1d` | 1 day | Daily trading, end-of-day analysis |
-| `1w` | 1 week | Weekly trend analysis |
-| `1M` | 1 month | Monthly analysis, long-term trends |
-
-**Note:** Not all timeframes are available for all asset classes. Check provider documentation for specific limitations.
-
----
+| Timeframe | Description |
+|-----------|-------------|
+| `1m` | 1 minute |
+| `5m` | 5 minutes |
+| `15m` | 15 minutes |
+| `30m` | 30 minutes |
+| `1h` | 1 hour |
+| `4h` | 4 hours |
+| `1d` | 1 day |
+| `1w` | 1 week |
+| `1M` | 1 month |
 
 ## Output Formats
 
-### Table Format (Default)
+- **Table** (default): Formatted table output
+- **CSV**: Comma-separated values
+- **JSON**: JSON array of OHLCV objects
 
-```
-====================================================================================================
-Timestamp                    Open         High          Low        Close               Volume
-====================================================================================================
-2026-01-12 10:00:00  $    259.08 $    260.21 $    256.22 $    259.37           39,952,300
-2026-01-12 11:00:00  $    257.02 $    259.29 $    255.70 $    259.04           50,419,300
-====================================================================================================
-```
+## Command Reference
 
-### CSV Format
-
-```bash
-python pull_ohlcv.py --symbol AAPL --timeframe 1d --limit 5 --format csv
-```
-
-Output:
-```csv
-timestamp,open,high,low,close,volume
-2026-01-09 00:00:00,259.08,260.21,256.22,259.37,39952300
-2026-01-08 00:00:00,257.02,259.29,255.70,259.04,50419300
-```
-
-### JSON Format
-
-```bash
-python pull_ohlcv.py --symbol AAPL --timeframe 1d --limit 5 --format json
-```
-
-Output:
-```json
-[
-  {
-    "timestamp": "2026-01-09T00:00:00",
-    "open": 259.08,
-    "high": 260.21,
-    "low": 256.22,
-    "close": 259.37,
-    "volume": 39952300
-  },
-  {
-    "timestamp": "2026-01-08T00:00:00",
-    "open": 257.02,
-    "high": 259.29,
-    "low": 255.70,
-    "close": 259.04,
-    "volume": 50419300
-  }
-]
-```
-
----
-
-## Rate Limiting
-
-### Cryptocurrency (Binance)
-
-- **Public Access**: No rate limiting required
-- **With API Keys**: Higher rate limits (1200 requests/minute)
-- **WebSocket**: Separate from REST API limits
-
-### Forex & U.S. Equities (Twelve Data)
-
-**Free Tier:**
-- **REST API**: 1 request per minute
-- **WebSocket**: Limited access (may require paid plan)
-- **Automatic Rate Limiting**: Scripts automatically wait 60 seconds between REST API calls
-
-**Rate Limit Behavior:**
-- `pull_ohlcv.py` detects when rate limit is approaching
-- Automatically waits required time before next request
-- Display message: `⏳ Rate limit: Waiting X seconds before next request...`
-
-**Polling Mode:**
-- Respects rate limits automatically
-- Waits exactly 60 seconds between requests
-- Perfect for free tier usage
-
----
-
-## Troubleshooting
-
-### Common Issues
-
-#### 1. "TWELVEDATA_SECRET environment variable not set"
-
-**Solution:**
-```bash
-# Check if .env file exists
-ls -la .env
-
-# If missing, create it:
-echo "TWELVEDATA_SECRET=your_key_here" > .env
-
-# Or export directly:
-export TWELVEDATA_SECRET=your_key_here
-```
-
-#### 2. "ModuleNotFoundError: No module named 'twelvedata'"
-
-**Solution:**
-```bash
-# Activate virtual environment
-source dpa/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-#### 3. "Subscription failed" (WebSocket)
-
-**Causes:**
-- Free tier may not support WebSocket for all symbols
-- WebSocket credits exhausted
-- Symbol not available for streaming
-
-**Solution:**
-- Use polling mode instead: `--poll`
-- Try different symbols (major pairs/stocks work better)
-- Check your Twelve Data plan tier
-
-#### 4. "Rate limit exceeded"
-
-**Solution:**
-- `pull_ohlcv.py` automatically handles rate limiting
-- For manual requests, wait 60 seconds between calls
-- Use polling mode for automatic rate limit compliance
-
-#### 5. "No data returned for SYMBOL"
-
-**Causes:**
-- Invalid symbol
-- Market closed (for stocks)
-- Date range outside available data
-
-**Solution:**
-- Verify symbol is correct (e.g., `AAPL` not `APPL`)
-- Check market hours for US equities
-- Try a different date range
-
-#### 6. "Invalid timeframe"
-
-**Solution:**
-- Use supported timeframes: `1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `1d`, `1w`, `1M`
-- Check provider documentation for symbol-specific limitations
-
-### Getting Help
-
-1. Check error messages - they provide specific guidance
-2. Verify API keys are set correctly
-3. Test with simple commands first (e.g., `--limit 1`)
-4. Check provider status pages for API outages
-
----
-
-## Quick Reference
-
-### Command Structure
-
-```bash
-python pull_ohlcv.py --symbol <SYMBOL> --timeframe <TF> [OPTIONS]
-```
-
-### Required Arguments
-
+**Required Arguments:**
 - `--symbol`: Trading pair or stock symbol
 - `--timeframe`: Time interval (required for historical data)
 
-### Optional Arguments
-
+**Optional Arguments:**
 - `--limit N`: Fetch last N candles
 - `--start YYYY-MM-DD`: Start date (requires `--end`)
 - `--end YYYY-MM-DD`: End date (requires `--start`)
-- `--format {table,csv,json}`: Output format
+- `--format {table,csv,json}`: Output format (default: table)
 - `--stream`: Enable WebSocket streaming
-- `--poll`: Enable polling mode (60s intervals)
+- `--poll`: Enable polling mode (60s intervals, Forex/Equities only)
 - `--timezone TZ`: Timezone (e.g., `UTC`, `America/New_York`)
+- `--indicator NAME`: Calculate technical indicator (e.g., `macd`)
 
-### Examples by Use Case
+## Rate Limiting
 
-**Backtesting (Historical Data):**
+- **Binance**: Public access unlimited; with API keys: 1200 requests/minute
+- **Twelve Data (Free Tier)**: 1 REST API request per minute (automatically handled)
+- **Polling Mode**: Automatically respects rate limits with 60-second intervals
+
+## Troubleshooting
+
+**1. "TWELVEDATA_SECRET environment variable not set"**
 ```bash
-python pull_ohlcv.py --symbol AAPL --timeframe 1d --start 2024-01-01 --end 2024-12-31 --format csv > aapl_2024.csv
+export TWELVEDATA_SECRET=your_key_here
+# Or add to .env file
 ```
 
-**Live Trading Bot (Historical + Streaming):**
+**2. "ModuleNotFoundError"**
 ```bash
-python pull_ohlcv.py --symbol BTCUSDT --timeframe 1h --limit 100 --stream
+source dpa/bin/activate
+pip install -r requirements.txt
 ```
 
-**Daily Data Collection (Polling):**
-```bash
-python pull_ohlcv.py --symbol AAPL --timeframe 1d --limit 1 --poll
-```
-
-**Minute-level Analysis:**
-```bash
-python pull_ohlcv.py --symbol AAPL --timeframe 1m --limit 1000
-```
-
----
-
-## License
-
-This project is open-source and licensed under the **MIT License**.
-
-**MIT License Terms:**
-- ✅ **Free to use** - Use the software for any purpose, including commercial use
-- ✅ **Free to modify** - Modify the software to suit your needs
-- ✅ **Free to distribute** - Share and distribute the software
-- ✅ **Free to sublicense** - Include in your own projects
-- ⚠️ **No warranty** - The software is provided "as is" without warranty
-- 📝 **Attribution** - Include the original copyright notice and license
-
-For full license terms, please see the [LICENSE](LICENSE) file in this repository.
-
-**What this means:**
-- You can use this software in commercial projects
-- You can modify and adapt it for your needs
-- You can fork and share it with others
-- You can include it in your own projects
-- You must include the MIT License and copyright notice
-
-## Contributing
-
-Contributions are welcome! This is an open-source project under the MIT License.
-
-Feel free to:
-- Submit bug reports
-- Suggest new features
-- Submit pull requests
-- Improve documentation
-
-For questions or discussions, please open an issue on GitHub.
-
----
+**3. "Subscription failed" (WebSocket)**
+- Free tier may not support WebSocket for all symbols
+- Use polling mode instead: `--poll`
+- Check your Twelve Data plan tier
 
 ## Legacy Scripts
 
-⚠️ **WARNING: The following scripts are legacy/development-only and should NOT be used in production.**
+The following scripts are legacy/development-only and should not be used in production:
+- `pull_fx.py` - Use `pull_ohlcv.py` instead
+- `pull_us-eq.py` - Use `pull_ohlcv.py` instead
+- `my_ohlcv.py` - Use `pull_ohlcv.py` instead
 
-### Legacy Files
+All functionality is available in `pull_ohlcv.py`.
 
-- **`pull_fx.py`** - Legacy Forex-specific script
-- **`pull_us-eq.py`** - Legacy U.S. Equities-specific script  
-- **`my_ohlcv.py`** - Experimental/development script
+## License
 
-### Why These Are Legacy
-
-These scripts are retained **only** for:
-- Debugging and reference purposes
-- Validation and testing against the canonical implementation
-- Historical code review
-
-### Migration Guide
-
-**All functionality is available in `pull_ohlcv.py`:**
-
-| Legacy Script | Replacement Command |
-|---------------|---------------------|
-| `pull_fx.py --symbol EUR/USD ...` | `pull_ohlcv.py --symbol EUR/USD ...` |
-| `pull_us-eq.py --symbol AAPL ...` | `pull_ohlcv.py --symbol AAPL ...` |
-| `my_ohlcv.py --symbol BTCUSDT ...` | `pull_ohlcv.py --symbol BTCUSDT ...` |
-
-### Production Policy
-
-- ❌ **DO NOT** use legacy scripts in production environments
-- ❌ **DO NOT** build new features on legacy scripts
-- ✅ **DO** use `pull_ohlcv.py` for all production deployments
-- ✅ **DO** use `pull_ohlcv.py` as the baseline for all new development
-
-**All new development must rely on `pull_ohlcv.py` as the foundation.**
+MIT License - See [LICENSE](LICENSE) for details.
