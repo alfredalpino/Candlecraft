@@ -6,3 +6,7 @@ python-dotenv>=1.0.0
 # Forex Data Puller - Twelve Data
 twelvedata>=1.0.0
 pandas>=2.0.0
+
+# Testing Dependencies
+pytest>=7.0.0
+pytest-cov>=4.0.0
