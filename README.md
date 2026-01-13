@@ -7,25 +7,18 @@ A production-ready system for pulling OHLCV data from Cryptocurrency, Forex, and
 
 ## Candlecraft Library
 
-This project includes the **`candlecraft`** library - a clean, reusable Python package for fetching OHLCV data programmatically.
+**`candlecraft`** is a Python library for fetching OHLCV data from multiple providers. Published on PyPI.
 
-### Install as Library
+### Installation
 
-**From this repository (development):**
 ```bash
-git clone https://github.com/alfredalpino/Data-Puller-AiO.git
-cd Data-Puller-AiO
-pip install -r requirements.txt
-# The candlecraft package is available in the project root
+pip install candlecraft
 ```
 
-**Note:** The `candlecraft` package will be published to PyPI in the future. For now, use it directly from this repository.
-
-### Library Usage
+### Quick Start
 
 ```python
 from candlecraft import fetch_ohlcv, OHLCV, AssetClass
-from datetime import datetime
 
 # Fetch OHLCV data (auto-detects asset class)
 data = fetch_ohlcv(
@@ -47,17 +40,59 @@ data = fetch_ohlcv(
 )
 ```
 
-**API Reference:**
+### API Reference
+
 - `fetch_ohlcv()` - Fetch OHLCV data from appropriate provider
 - `list_indicators()` - List available technical indicators
 - `OHLCV` - Data model for OHLCV candles
 - `AssetClass` - Enum for asset class types (CRYPTO, FOREX, EQUITY)
 
-## Production Interface (CLI)
+### Configuration
 
-**`pull_ohlcv.py` is the canonical production interface for all asset classes.** The script automatically detects asset class from symbol format and routes to the appropriate data provider.
+Set environment variables for API authentication:
 
-## Quick Start
+```bash
+# Binance API (Optional - for higher rate limits)
+export BINANCE_API_KEY=your_key_here
+export BINANCE_API_SECRET=your_secret_here
+
+# Twelve Data API (Required for Forex and US Equities)
+export TWELVEDATA_SECRET=your_key_here
+```
+
+**API Keys:**
+- **Binance**: [API Management](https://www.binance.com/en/my/settings/api-management) (optional, works without keys for public data)
+- **Twelve Data**: [Sign up](https://twelvedata.com/) (required for Forex/Equities)
+
+### Supported Asset Classes
+
+| Asset Class | Provider | Example Symbols |
+|-------------|----------|-----------------|
+| Cryptocurrency | Binance | BTCUSDT, ETHUSDT, BNBUSDT |
+| Forex | Twelve Data | EUR/USD, GBP/USD, USD/JPY |
+| U.S. Equities | Twelve Data | AAPL, MSFT, TSLA, GOOGL |
+
+### Supported Timeframes
+
+`1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `1d`, `1w`, `1M`
+
+---
+
+## CLI Interface (Optional)
+
+**`pull_ohlcv.py`** is a command-line interface for the same functionality. Use this repository for CLI access or development.
+
+### Installation (CLI)
+
+```bash
+git clone https://github.com/alfredalpino/Data-Puller-AiO.git
+cd Data-Puller-AiO
+python -m venv dpa
+source dpa/bin/activate  # On Windows: dpa\Scripts\activate
+pip install -r requirements.txt
+```
+
+### Quick Start (CLI)
 
 ```bash
 # Cryptocurrency
@@ -75,54 +110,6 @@ python pull_ohlcv.py --symbol BTCUSDT --timeframe 1h --stream
 # Polling mode (Forex/Equities)
 python pull_ohlcv.py --symbol EUR/USD --timeframe 1m --limit 1 --poll
 ```
-
-## Installation
-
-### For CLI Usage
-
-```bash
-git clone https://github.com/alfredalpino/Data-Puller-AiO.git
-cd Data-Puller-AiO
-python -m venv dpa
-source dpa/bin/activate  # On Windows: dpa\Scripts\activate
-pip install -r requirements.txt
-```
-
-### For Library Usage
-
-The `candlecraft` library is included in this repository. After cloning and installing dependencies (see above), you can import it directly:
-
-```python
-from candlecraft import fetch_ohlcv, OHLCV, AssetClass
-```
-
-## Configuration
-
-Create a `.env` file in the project root:
-
-```bash
-# Binance API (Optional - for higher rate limits)
-BINANCE_API_KEY=your_binance_api_key_here
-BINANCE_API_SECRET=your_binance_api_secret_here
-BINANCE_TESTNET=false
-
-# Twelve Data API (Required for Forex and US Equities)
-TWELVEDATA_SECRET=your_twelvedata_api_key_here
-```
-
-**API Keys:**
-- **Binance**: [API Management](https://www.binance.com/en/my/settings/api-management) (optional, works without keys for public data)
-- **Twelve Data**: [Sign up](https://twelvedata.com/) (required for Forex/Equities)
-
-## Supported Asset Classes
-
-| Asset Class | Provider | Example Symbols |
-|-------------|----------|-----------------|
-| Cryptocurrency | Binance | BTCUSDT, ETHUSDT, BNBUSDT |
-| Forex | Twelve Data | EUR/USD, GBP/USD, USD/JPY |
-| U.S. Equities | Twelve Data | AAPL, MSFT, TSLA, GOOGL |
-
-## Usage
 
 ### Historical Data
 
@@ -155,27 +142,7 @@ python pull_ohlcv.py --symbol BTCUSDT --timeframe 1h --limit 100 --stream
 python pull_ohlcv.py --symbol EUR/USD --timeframe 1m --limit 1 --poll
 ```
 
-## Supported Timeframes
-
-| Timeframe | Description |
-|-----------|-------------|
-| `1m` | 1 minute |
-| `5m` | 5 minutes |
-| `15m` | 15 minutes |
-| `30m` | 30 minutes |
-| `1h` | 1 hour |
-| `4h` | 4 hours |
-| `1d` | 1 day |
-| `1w` | 1 week |
-| `1M` | 1 month |
-
-## Output Formats
-
-- **Table** (default): Formatted table output
-- **CSV**: Comma-separated values
-- **JSON**: JSON array of OHLCV objects
-
-## Command Reference
+### Command Reference
 
 **Required Arguments:**
 - `--symbol`: Trading pair or stock symbol
@@ -191,13 +158,19 @@ python pull_ohlcv.py --symbol EUR/USD --timeframe 1m --limit 1 --poll
 - `--timezone TZ`: Timezone (e.g., `UTC`, `America/New_York`)
 - `--indicator NAME`: Calculate technical indicator (e.g., `macd`)
 
-## Rate Limiting
+### Output Formats
+
+- **Table** (default): Formatted table output
+- **CSV**: Comma-separated values
+- **JSON**: JSON array of OHLCV objects
+
+### Rate Limiting
 
 - **Binance**: Public access unlimited; with API keys: 1200 requests/minute
 - **Twelve Data (Free Tier)**: 1 REST API request per minute (automatically handled)
 - **Polling Mode**: Automatically respects rate limits with 60-second intervals
 
-## Troubleshooting
+### Troubleshooting
 
 **1. "TWELVEDATA_SECRET environment variable not set"**
 ```bash
