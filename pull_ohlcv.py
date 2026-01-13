@@ -29,6 +29,7 @@ import json
 import time
 import signal
 import threading
+import importlib.util
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any, Callable, Tuple, Protocol
 from enum import Enum
@@ -784,14 +785,24 @@ def stream_realtime_twelvedata(
         ws.close()
 
 
-def format_ohlcv_table(data: List[OHLCV], asset_class: AssetClass = AssetClass.CRYPTO) -> str:
+def format_ohlcv_table(data: List[OHLCV], asset_class: AssetClass = AssetClass.CRYPTO, indicator_data: Optional[List[Dict[str, Any]]] = None) -> str:
     """Format OHLCV data as a table. Returns formatted string."""
     lines = []
     lines.append("\n" + "=" * 100)
-    lines.append(f"{'Timestamp':<20} {'Open':>12} {'High':>12} {'Low':>12} {'Close':>12} {'Volume':>20}")
+    
+    # Build header
+    header = f"{'Timestamp':<20} {'Open':>12} {'High':>12} {'Low':>12} {'Close':>12} {'Volume':>20}"
+    
+    # Add indicator columns if present
+    if indicator_data and len(indicator_data) > 0:
+        indicator_keys = sorted(set(key for row in indicator_data if row for key in row.keys()))
+        for key in indicator_keys:
+            header += f" {key.capitalize():>12}"
+    
+    lines.append(header)
     lines.append("=" * 100)
     
-    for candle in data:
+    for idx, candle in enumerate(data):
         timestamp_str = candle.timestamp.strftime("%Y-%m-%d %H:%M:%S")
         
         if asset_class == AssetClass.EQUITY:
@@ -813,7 +824,7 @@ def format_ohlcv_table(data: List[OHLCV], asset_class: AssetClass = AssetClass.C
             close_str = f"{candle.close:>12.8f}"
             volume_str = f"{candle.volume:>20.8f}" if candle.volume else " " * 20
         
-        lines.append(
+        row = (
             f"{timestamp_str:<20} "
             f"{open_str} "
             f"{high_str} "
@@ -821,23 +832,41 @@ def format_ohlcv_table(data: List[OHLCV], asset_class: AssetClass = AssetClass.C
             f"{close_str} "
             f"{volume_str}"
         )
+        
+        # Add indicator values if present
+        if indicator_data and idx < len(indicator_data) and indicator_data[idx]:
+            indicator_keys = sorted(set(key for row in indicator_data if row for key in row.keys()))
+            for key in indicator_keys:
+                val = indicator_data[idx].get(key) if idx < len(indicator_data) else None
+                if val is not None:
+                    row += f" {val:>12.8f}"
+                else:
+                    row += " " * 13
+        
+        lines.append(row)
     
     lines.append("=" * 100)
     return "\n".join(lines)
 
 
-def format_ohlcv_json(data: List[OHLCV]) -> str:
+def format_ohlcv_json(data: List[OHLCV], indicator_data: Optional[List[Dict[str, Any]]] = None) -> str:
     """Format OHLCV data as JSON. Returns formatted string."""
     output = []
-    for candle in data:
-        output.append({
+    for idx, candle in enumerate(data):
+        row = {
             "timestamp": candle.timestamp.isoformat(),
             "open": candle.open,
             "high": candle.high,
             "low": candle.low,
             "close": candle.close,
             "volume": candle.volume,
-        })
+        }
+        
+        # Add indicator values if present
+        if indicator_data and idx < len(indicator_data) and indicator_data[idx]:
+            row.update(indicator_data[idx])
+        
+        output.append(row)
     return json.dumps(output, indent=2)
 
 
@@ -851,21 +880,29 @@ class StdoutSink:
     def write(self, data: List[OHLCV]) -> None:
         output = self.formatter(data)
         print(output)
+    
+    def write_with_indicators(self, data: List[OHLCV], indicator_data: Optional[List[Dict[str, Any]]]) -> None:
+        """Write data with indicator values."""
+        output = self.formatter(data, indicator_data)
+        print(output)
 
 
 class CSVSink:
     """
     Writes OHLCV data to a CSV file.
     """
-    def __init__(self, path: str):
+    def __init__(self, path: str, indicator_data: Optional[List[Dict[str, Any]]] = None):
         self.path = Path(path)
+        self.indicator_data = indicator_data
 
     def write(self, data: List[OHLCV]) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
 
         with self.path.open("w", newline="") as f:
             writer = csv.writer(f)
-            writer.writerow([
+            
+            # Build header
+            header = [
                 "timestamp",
                 "open",
                 "high",
@@ -876,10 +913,17 @@ class CSVSink:
                 "timeframe",
                 "asset_class",
                 "source"
-            ])
+            ]
+            
+            # Add indicator columns if present
+            if self.indicator_data and len(self.indicator_data) > 0:
+                indicator_keys = sorted(set(key for row in self.indicator_data if row for key in row.keys()))
+                header.extend(indicator_keys)
+            
+            writer.writerow(header)
 
-            for dp in data:
-                writer.writerow([
+            for idx, dp in enumerate(data):
+                row = [
                     dp.timestamp.isoformat(),
                     dp.open,
                     dp.high,
@@ -890,7 +934,54 @@ class CSVSink:
                     dp.timeframe,
                     dp.asset_class.value,
                     dp.source
-                ])
+                ]
+                
+                # Add indicator values if present
+                if self.indicator_data and idx < len(self.indicator_data) and self.indicator_data[idx]:
+                    indicator_keys = sorted(set(key for r in self.indicator_data if r for key in r.keys()))
+                    for key in indicator_keys:
+                        val = self.indicator_data[idx].get(key) if idx < len(self.indicator_data) else None
+                        row.append(val)
+                
+                writer.writerow(row)
+
+
+def load_indicator(indicator_name: str) -> Optional[Callable[[List[OHLCV]], List[Dict[str, Any]]]]:
+    """
+    Dynamically load an indicator module from the indicators/ directory.
+    
+    Args:
+        indicator_name: Name of the indicator (e.g., 'macd')
+    
+    Returns:
+        The indicator's calculate function, or None if not found.
+    """
+    indicators_dir = Path(__file__).parent / "indicators"
+    indicator_file = indicators_dir / f"{indicator_name}.py"
+    
+    if not indicator_file.exists():
+        print(f"✗ Indicator module not found: {indicator_file}")
+        print(f"  Expected file: indicators/{indicator_name}.py")
+        sys.exit(1)
+    
+    try:
+        spec = importlib.util.spec_from_file_location(f"indicators.{indicator_name}", indicator_file)
+        if spec is None or spec.loader is None:
+            print(f"✗ Failed to load indicator module: {indicator_name}")
+            sys.exit(1)
+        
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        
+        if not hasattr(module, "calculate"):
+            print(f"✗ Indicator module '{indicator_name}' does not export a 'calculate' function")
+            sys.exit(1)
+        
+        return module.calculate
+    
+    except Exception as e:
+        print(f"✗ Error loading indicator module '{indicator_name}': {e}")
+        sys.exit(1)
 
 
 def parse_dates(start_str: Optional[str], end_str: Optional[str]) -> Tuple[Optional[datetime], Optional[datetime]]:
@@ -1001,6 +1092,12 @@ Examples:
         help="Timezone for timestamps (Forex/Equities only). Defaults: Exchange (Forex), America/New_York (Equity)",
     )
     
+    parser.add_argument(
+        "--indicator",
+        type=str,
+        help="Calculate and display technical indicator (e.g., 'macd'). Indicator module must exist in indicators/ directory.",
+    )
+    
     args = parser.parse_args()
     
     # Detect asset class
@@ -1030,6 +1127,12 @@ Examples:
     
     # Parse dates
     start_dt, end_dt = parse_dates(args.start, args.end)
+    
+    # Load indicator if specified
+    indicator_func = None
+    if args.indicator:
+        indicator_func = load_indicator(args.indicator)
+        print(f"✓ Loaded indicator: {args.indicator}")
     
     # Handle polling mode
     if args.poll:
@@ -1064,13 +1167,30 @@ Examples:
                     timezone=args.timezone,
                 )
                 
+                # Calculate indicator if specified
+                indicator_data = None
+                if indicator_func:
+                    try:
+                        indicator_data = indicator_func(ohlcv_data)
+                    except Exception as e:
+                        print(f"✗ Error calculating indicator: {e}")
+                        indicator_data = None
+                
                 if args.format == "table":
-                    sink = StdoutSink(lambda data: format_ohlcv_table(data, asset_class))
+                    if indicator_data:
+                        print(format_ohlcv_table(ohlcv_data, asset_class, indicator_data))
+                    else:
+                        sink = StdoutSink(lambda data: format_ohlcv_table(data, asset_class))
+                        sink.write(ohlcv_data)
                 elif args.format == "csv":
-                    sink = CSVSink("output.csv")
+                    sink = CSVSink("output.csv", indicator_data)
+                    sink.write(ohlcv_data)
                 else:
-                    sink = StdoutSink(format_ohlcv_json)
-                sink.write(ohlcv_data)
+                    if indicator_data:
+                        print(format_ohlcv_json(ohlcv_data, indicator_data))
+                    else:
+                        sink = StdoutSink(format_ohlcv_json)
+                        sink.write(ohlcv_data)
                 
                 print(f"\n⏳ Waiting 60 seconds before next poll...")
                 print("   (Press Ctrl+C to stop)")
@@ -1105,13 +1225,30 @@ Examples:
                 timezone=args.timezone,
             )
             
+            # Calculate indicator if specified
+            indicator_data = None
+            if indicator_func:
+                try:
+                    indicator_data = indicator_func(ohlcv_data)
+                except Exception as e:
+                    print(f"✗ Error calculating indicator: {e}")
+                    indicator_data = None
+            
             if args.format == "table":
-                sink = StdoutSink(lambda data: format_ohlcv_table(data, asset_class))
+                if indicator_data:
+                    print(format_ohlcv_table(ohlcv_data, asset_class, indicator_data))
+                else:
+                    sink = StdoutSink(lambda data: format_ohlcv_table(data, asset_class))
+                    sink.write(ohlcv_data)
             elif args.format == "csv":
-                sink = CSVSink("output.csv")
+                sink = CSVSink("output.csv", indicator_data)
+                sink.write(ohlcv_data)
             else:
-                sink = StdoutSink(format_ohlcv_json)
-            sink.write(ohlcv_data)
+                if indicator_data:
+                    print(format_ohlcv_json(ohlcv_data, indicator_data))
+                else:
+                    sink = StdoutSink(format_ohlcv_json)
+                    sink.write(ohlcv_data)
             
             print("\n" + "=" * 80)
             print("STARTING REAL-TIME STREAMING")
@@ -1177,13 +1314,30 @@ Examples:
             timezone=args.timezone,
         )
         
+        # Calculate indicator if specified
+        indicator_data = None
+        if indicator_func:
+            try:
+                indicator_data = indicator_func(ohlcv_data)
+            except Exception as e:
+                print(f"✗ Error calculating indicator: {e}")
+                indicator_data = None
+        
         if args.format == "table":
-            sink = StdoutSink(lambda data: format_ohlcv_table(data, asset_class))
+            if indicator_data:
+                print(format_ohlcv_table(ohlcv_data, asset_class, indicator_data))
+            else:
+                sink = StdoutSink(lambda data: format_ohlcv_table(data, asset_class))
+                sink.write(ohlcv_data)
         elif args.format == "csv":
-            sink = CSVSink("output.csv")
+            sink = CSVSink("output.csv", indicator_data)
+            sink.write(ohlcv_data)
         else:
-            sink = StdoutSink(format_ohlcv_json)
-        sink.write(ohlcv_data)
+            if indicator_data:
+                print(format_ohlcv_json(ohlcv_data, indicator_data))
+            else:
+                sink = StdoutSink(format_ohlcv_json)
+                sink.write(ohlcv_data)
 
 
 if __name__ == "__main__":
