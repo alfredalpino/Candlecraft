@@ -5,7 +5,55 @@ A production-ready system for pulling OHLCV data from Cryptocurrency, Forex, and
 **Repository:** https://github.com/alfredalpino/Data-Puller-AiO  
 **License:** MIT License - See [LICENSE](LICENSE) for details
 
-## Production Interface
+## Candlecraft Library
+
+This project includes the **`candlecraft`** library - a clean, reusable Python package for fetching OHLCV data programmatically.
+
+### Install as Library
+
+**From this repository (development):**
+```bash
+git clone https://github.com/alfredalpino/Data-Puller-AiO.git
+cd Data-Puller-AiO
+pip install -r requirements.txt
+# The candlecraft package is available in the project root
+```
+
+**Note:** The `candlecraft` package will be published to PyPI in the future. For now, use it directly from this repository.
+
+### Library Usage
+
+```python
+from candlecraft import fetch_ohlcv, OHLCV, AssetClass
+from datetime import datetime
+
+# Fetch OHLCV data (auto-detects asset class)
+data = fetch_ohlcv(
+    symbol="BTCUSDT",
+    timeframe="1h",
+    limit=100
+)
+
+# Access OHLCV data
+for candle in data:
+    print(f"{candle.timestamp}: {candle.close}")
+
+# Explicit asset class
+data = fetch_ohlcv(
+    symbol="EUR/USD",
+    timeframe="1h",
+    asset_class=AssetClass.FOREX,
+    limit=50
+)
+```
+
+**API Reference:**
+- `fetch_ohlcv()` - Fetch OHLCV data from appropriate provider
+- `list_indicators()` - List available technical indicators
+- `OHLCV` - Data model for OHLCV candles
+- `AssetClass` - Enum for asset class types (CRYPTO, FOREX, EQUITY)
+
+## Production Interface (CLI)
 
 **`pull_ohlcv.py` is the canonical production interface for all asset classes.** The script automatically detects asset class from symbol format and routes to the appropriate data provider.
 
@@ -30,12 +78,22 @@ python pull_ohlcv.py --symbol EUR/USD --timeframe 1m --limit 1 --poll
 
 ## Installation
 
+### For CLI Usage
+
 ```bash
 git clone https://github.com/alfredalpino/Data-Puller-AiO.git
 cd Data-Puller-AiO
 python -m venv dpa
 source dpa/bin/activate  # On Windows: dpa\Scripts\activate
 pip install -r requirements.txt
+```
+
+### For Library Usage
+
+The `candlecraft` library is included in this repository. After cloning and installing dependencies (see above), you can import it directly:
+
+```python
+from candlecraft import fetch_ohlcv, OHLCV, AssetClass
 ```
 
 ## Configuration
