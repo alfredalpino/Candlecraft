@@ -32,8 +32,6 @@ import threading
 import importlib.util
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any, Callable, Tuple, Protocol
-from enum import Enum
-from dataclasses import dataclass
 import csv
 from pathlib import Path
 
@@ -44,7 +42,13 @@ try:
 except ImportError:
     pass
 
-# Import providers
+# Import from candlecraft library
+from candlecraft import fetch_ohlcv, OHLCV, AssetClass
+from candlecraft.utils import detect_asset_class, to_utc, normalize_symbol, validate_ohlcv
+from candlecraft.providers import authenticate_binance, authenticate_twelvedata
+from candlecraft.api import load_indicator
+
+# Import providers for streaming
 try:
     from binance.client import Client
     from binance.exceptions import BinanceAPIException
@@ -65,28 +69,6 @@ except ImportError:
     WEBSOCKET_AVAILABLE = False
 
 
-class AssetClass(Enum):
-    """Asset class types"""
-    CRYPTO = "crypto"
-    FOREX = "forex"
-    EQUITY = "equity"
-
-
-@dataclass
-class OHLCV:
-    """Internal data model for OHLCV data."""
-    timestamp: datetime
-    open: float
-    high: float
-    low: float
-    close: float
-    volume: Optional[float]
-    symbol: str
-    timeframe: str
-    asset_class: AssetClass
-    source: str
-
-
 class Sink(Protocol):
     """
     Output sink for OHLCV data.
@@ -94,380 +76,6 @@ class Sink(Protocol):
     """
     def write(self, data: List[OHLCV]) -> None:
         ...
-
-
-def to_utc(ts: datetime) -> datetime:
-    """Convert datetime to timezone-aware UTC datetime."""
-    if ts.tzinfo is None:
-        return ts.replace(tzinfo=timezone.utc)
-    return ts.astimezone(timezone.utc)
-
-
-def validate_ohlcv(dp: OHLCV) -> None:
-    """Validate OHLCV data invariants. Raises ValueError on invalid data."""
-    if dp.high < dp.low:
-        raise ValueError("Invalid OHLCV: high < low")
-    if dp.high < max(dp.open, dp.close):
-        raise ValueError("Invalid OHLCV: high < open/close")
-    if dp.low > min(dp.open, dp.close):
-        raise ValueError("Invalid OHLCV: low > open/close")
-    if dp.open <= 0 or dp.close <= 0:
-        raise ValueError("Invalid OHLCV: non-positive price")
-
-
-# Rate limiting for Twelve Data
-_last_api_call_time = 0
-_rate_limit_delay = 60
-
-
-def wait_for_rate_limit():
-    """Wait if necessary to respect rate limit (1 request per minute for Twelve Data)."""
-    global _last_api_call_time
-    
-    current_time = time.time()
-    time_since_last_call = current_time - _last_api_call_time
-    
-    if time_since_last_call < _rate_limit_delay:
-        wait_time = _rate_limit_delay - time_since_last_call
-        print(f"⏳ Rate limit: Waiting {wait_time:.1f} seconds before next request...")
-        time.sleep(wait_time)
-    
-    _last_api_call_time = time.time()
-
-
-def detect_asset_class(symbol: str) -> AssetClass:
-    """
-    Detect asset class from symbol format.
-    
-    Rules:
-    - Crypto: Contains 'USDT', 'BTC', 'ETH' or similar patterns, no '/' or spaces
-    - Forex: Contains '/' separator (e.g., EUR/USD)
-    - Equity: Simple uppercase letters, no special separators (e.g., AAPL, MSFT)
-    """
-    symbol_upper = symbol.upper().strip()
-    
-    # Check for forex pattern (contains / or _)
-    if '/' in symbol or '_' in symbol:
-        return AssetClass.FOREX
-    
-    # Check for crypto patterns (ends with USDT, BTC, ETH, etc. or contains common crypto patterns)
-    crypto_patterns = ['USDT', 'BTC', 'ETH', 'BNB', 'ADA', 'SOL', 'DOGE', 'XRP', 'DOT', 'LINK']
-    if any(pattern in symbol_upper for pattern in crypto_patterns) and '/' not in symbol_upper:
-        return AssetClass.CRYPTO
-    
-    # Default to equity (simple uppercase letters)
-    return AssetClass.EQUITY
-
-
-def normalize_symbol(symbol: str, asset_class: AssetClass) -> str:
-    """Normalize symbol format based on asset class."""
-    if asset_class == AssetClass.FOREX:
-        return symbol.replace("_", "/").upper()
-    elif asset_class == AssetClass.EQUITY:
-        return symbol.upper().strip()
-    else:  # CRYPTO
-        return symbol.upper()
-
-
-def get_default_timezone(asset_class: AssetClass) -> str:
-    """Get default timezone for asset class."""
-    if asset_class == AssetClass.EQUITY:
-        return "America/New_York"
-    elif asset_class == AssetClass.FOREX:
-        return "Exchange"
-    else:  # CRYPTO
-        return "UTC"
-
-
-def authenticate_binance():
-    """Authenticate with Binance API."""
-    if not BINANCE_AVAILABLE:
-        print("Error: python-binance library not installed.")
-        print("Install it with: pip install python-binance")
-        sys.exit(1)
-    
-    api_key = os.getenv("BINANCE_API_KEY")
-    api_secret = os.getenv("BINANCE_API_SECRET")
-    testnet = os.getenv("BINANCE_TESTNET", "false").lower() == "true"
-    
-    if api_key and api_secret:
-        try:
-            client = Client(api_key=api_key, api_secret=api_secret, testnet=testnet)
-            print(f"✓ Authenticated with Binance API (testnet: {testnet})")
-            return client
-        except Exception as e:
-            print(f"✗ Authentication failed: {e}")
-            sys.exit(1)
-    else:
-        try:
-            client = Client(testnet=testnet)
-            print("✓ Using Binance public API (no authentication required)")
-            print("  Note: For higher rate limits, set BINANCE_API_KEY and BINANCE_API_SECRET")
-            return client
-        except Exception as e:
-            print(f"✗ Failed to initialize Binance client: {e}")
-            sys.exit(1)
-
-
-def authenticate_twelvedata():
-    """Authenticate with Twelve Data API."""
-    if not TWELVEDATA_AVAILABLE:
-        print("Error: twelvedata library not installed.")
-        print("Install it with: pip install twelvedata")
-        sys.exit(1)
-    
-    api_key = os.getenv("TWELVEDATA_SECRET")
-    
-    if not api_key:
-        print("✗ TWELVEDATA_SECRET environment variable not set.")
-        print("  Set it in your .env file or export it as an environment variable.")
-        sys.exit(1)
-    
-    try:
-        client = TDClient(apikey=api_key)
-        print("✓ Authenticated with Twelve Data API")
-        return client
-    except Exception as e:
-        print(f"✗ Authentication failed: {e}")
-        sys.exit(1)
-
-
-def fetch_ohlcv_binance(
-    client: Client,
-    symbol: str,
-    timeframe: str,
-    limit: Optional[int] = None,
-    start: Optional[datetime] = None,
-    end: Optional[datetime] = None,
-) -> List[OHLCV]:
-    """Fetch OHLCV data from Binance."""
-    interval_map = {
-        "1m": Client.KLINE_INTERVAL_1MINUTE,
-        "5m": Client.KLINE_INTERVAL_5MINUTE,
-        "15m": Client.KLINE_INTERVAL_15MINUTE,
-        "30m": Client.KLINE_INTERVAL_30MINUTE,
-        "1h": Client.KLINE_INTERVAL_1HOUR,
-        "4h": Client.KLINE_INTERVAL_4HOUR,
-        "1d": Client.KLINE_INTERVAL_1DAY,
-        "1w": Client.KLINE_INTERVAL_1WEEK,
-        "1M": Client.KLINE_INTERVAL_1MONTH,
-    }
-    
-    if timeframe not in interval_map:
-        print(f"✗ Unsupported timeframe: {timeframe}")
-        print(f"  Supported: {', '.join(interval_map.keys())}")
-        sys.exit(1)
-    
-    interval = interval_map[timeframe]
-    symbol_upper = symbol.upper()
-    
-    try:
-        client.ping()
-    except Exception as e:
-        print(f"✗ Connection test failed: {e}")
-        sys.exit(1)
-    
-    try:
-        if limit:
-            if limit > 1000:
-                print("⚠ Warning: Binance limit is 1000 candles per request. Using 1000.")
-                limit = 1000
-            
-            print(f"Fetching {limit} candles for {symbol_upper} ({timeframe})...")
-            klines = client.get_klines(
-                symbol=symbol_upper,
-                interval=interval,
-                limit=limit,
-            )
-        elif start and end:
-            start_ms = int(start.timestamp() * 1000)
-            end_ms = int(end.timestamp() * 1000)
-            
-            print(f"Fetching {symbol_upper} ({timeframe}) from {start} to {end}...")
-            
-            all_klines = []
-            current_start = start_ms
-            
-            while current_start < end_ms:
-                klines = client.get_klines(
-                    symbol=symbol_upper,
-                    interval=interval,
-                    startTime=current_start,
-                    endTime=end_ms,
-                    limit=1000,
-                )
-                
-                if not klines:
-                    break
-                
-                all_klines.extend(klines)
-                
-                if len(klines) < 1000:
-                    break
-                
-                current_start = klines[-1][0] + 1
-            
-            klines = all_klines
-        else:
-            print("✗ Either --limit or both --start and --end must be provided")
-            sys.exit(1)
-        
-        if not klines:
-            print(f"✗ No data returned for {symbol_upper}")
-            sys.exit(1)
-        
-        ohlcv_data = []
-        for kline in klines:
-            ohlcv = OHLCV(
-                timestamp=to_utc(datetime.fromtimestamp(kline[0] / 1000)),
-                open=float(kline[1]),
-                high=float(kline[2]),
-                low=float(kline[3]),
-                close=float(kline[4]),
-                volume=float(kline[5]),
-                symbol=symbol_upper,
-                timeframe=timeframe,
-                asset_class=AssetClass.CRYPTO,
-                source="binance",
-            )
-            validate_ohlcv(ohlcv)
-            ohlcv_data.append(ohlcv)
-        
-        print(f"✓ Successfully fetched {len(ohlcv_data)} candles")
-        return ohlcv_data
-    
-    except BinanceAPIException as e:
-        print(f"✗ Binance API error: {e}")
-        sys.exit(1)
-    except Exception as e:
-        print(f"✗ Error fetching data: {e}")
-        sys.exit(1)
-
-
-def fetch_ohlcv_twelvedata(
-    client: TDClient,
-    symbol: str,
-    timeframe: str,
-    asset_class: AssetClass,
-    limit: Optional[int] = None,
-    start: Optional[datetime] = None,
-    end: Optional[datetime] = None,
-    timezone: Optional[str] = None,
-) -> List[OHLCV]:
-    """Fetch OHLCV data from Twelve Data."""
-    interval_map = {
-        "1m": "1min",
-        "5m": "5min",
-        "15m": "15min",
-        "30m": "30min",
-        "1h": "1h",
-        "4h": "4h",
-        "1d": "1day",
-        "1w": "1week",
-        "1M": "1month",
-    }
-    
-    if timeframe not in interval_map:
-        print(f"✗ Unsupported timeframe: {timeframe}")
-        print(f"  Supported: {', '.join(interval_map.keys())}")
-        sys.exit(1)
-    
-    interval = interval_map[timeframe]
-    symbol_normalized = normalize_symbol(symbol, asset_class)
-    default_timezone = timezone if timezone else get_default_timezone(asset_class)
-    
-    try:
-        wait_for_rate_limit()
-        
-        if limit:
-            print(f"Fetching {limit} candles for {symbol_normalized} ({timeframe})...")
-            
-            ts = client.time_series(
-                symbol=symbol_normalized,
-                interval=interval,
-                outputsize=limit,
-                timezone=default_timezone,
-            )
-            
-            df = ts.as_pandas()
-        
-        elif start and end:
-            print(f"Fetching {symbol_normalized} ({timeframe}) from {start} to {end}...")
-            
-            start_str = start.strftime("%Y-%m-%d")
-            end_str = end.strftime("%Y-%m-%d")
-            
-            wait_for_rate_limit()
-            
-            ts = client.time_series(
-                symbol=symbol_normalized,
-                interval=interval,
-                start_date=start_str,
-                end_date=end_str,
-                timezone=default_timezone,
-            )
-            
-            df = ts.as_pandas()
-        
-        else:
-            print("✗ Either --limit or both --start and --end must be provided")
-            sys.exit(1)
-        
-        if df.empty:
-            print(f"✗ No data returned for {symbol_normalized}")
-            sys.exit(1)
-        
-        ohlcv_data = []
-        for timestamp, row in df.iterrows():
-            try:
-                ts = timestamp.to_pydatetime() if hasattr(timestamp, "to_pydatetime") else timestamp
-                ohlcv = OHLCV(
-                    timestamp=to_utc(ts),
-                    open=float(row["open"]),
-                    high=float(row["high"]),
-                    low=float(row["low"]),
-                    close=float(row["close"]),
-                    volume=float(row["volume"]) if "volume" in row else None,
-                    symbol=symbol_normalized,
-                    timeframe=timeframe,
-                    asset_class=asset_class,
-                    source="twelvedata",
-                )
-                validate_ohlcv(ohlcv)
-                ohlcv_data.append(ohlcv)
-            except ValueError:
-                # Validation errors must fail fast - do not suppress
-                raise
-            except Exception as e:
-                print(f"⚠ Warning: Failed to process data point: {e}")
-                continue
-        
-        print(f"✓ Successfully fetched {len(ohlcv_data)} candles")
-        return ohlcv_data
-    
-    except Exception as e:
-        print(f"✗ Error fetching data: {e}")
-        sys.exit(1)
-
-
-def fetch_ohlcv(
-    symbol: str,
-    timeframe: str,
-    asset_class: AssetClass,
-    limit: Optional[int] = None,
-    start: Optional[datetime] = None,
-    end: Optional[datetime] = None,
-    timezone: Optional[str] = None,
-) -> List[OHLCV]:
-    """Unified function to fetch OHLCV data from appropriate provider."""
-    if asset_class == AssetClass.CRYPTO:
-        client = authenticate_binance()
-        return fetch_ohlcv_binance(client, symbol, timeframe, limit, start, end)
-    else:
-        client = authenticate_twelvedata()
-        return fetch_ohlcv_twelvedata(
-            client, symbol, timeframe, asset_class, limit, start, end, timezone
-        )
 
 
 def stream_realtime_binance(
@@ -946,9 +554,10 @@ class CSVSink:
                 writer.writerow(row)
 
 
-def load_indicator(indicator_name: str) -> Optional[Callable[[List[OHLCV]], List[Dict[str, Any]]]]:
+def load_indicator_cli(indicator_name: str) -> Optional[Callable[[List[OHLCV]], List[Dict[str, Any]]]]:
     """
     Dynamically load an indicator module from the indicators/ directory.
+    CLI wrapper that handles errors with sys.exit.
     
     Args:
         indicator_name: Name of the indicator (e.g., 'macd')
@@ -957,30 +566,14 @@ def load_indicator(indicator_name: str) -> Optional[Callable[[List[OHLCV]], List
         The indicator's calculate function, or None if not found.
     """
     indicators_dir = Path(__file__).parent / "indicators"
-    indicator_file = indicators_dir / f"{indicator_name}.py"
-    
-    if not indicator_file.exists():
-        print(f"✗ Indicator module not found: {indicator_file}")
-        print(f"  Expected file: indicators/{indicator_name}.py")
-        sys.exit(1)
     
     try:
-        spec = importlib.util.spec_from_file_location(f"indicators.{indicator_name}", indicator_file)
-        if spec is None or spec.loader is None:
-            print(f"✗ Failed to load indicator module: {indicator_name}")
-            sys.exit(1)
-        
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        
-        if not hasattr(module, "calculate"):
-            print(f"✗ Indicator module '{indicator_name}' does not export a 'calculate' function")
-            sys.exit(1)
-        
-        return module.calculate
-    
-    except Exception as e:
-        print(f"✗ Error loading indicator module '{indicator_name}': {e}")
+        return load_indicator(indicator_name, indicators_dir)
+    except FileNotFoundError as e:
+        print(f"✗ {e}")
+        sys.exit(1)
+    except (AttributeError, ImportError) as e:
+        print(f"✗ {e}")
         sys.exit(1)
 
 
@@ -1131,7 +724,7 @@ Examples:
     # Load indicator if specified
     indicator_func = None
     if args.indicator:
-        indicator_func = load_indicator(args.indicator)
+        indicator_func = load_indicator_cli(args.indicator)
         print(f"✓ Loaded indicator: {args.indicator}")
     
     # Handle polling mode

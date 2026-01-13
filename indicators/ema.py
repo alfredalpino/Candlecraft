@@ -11,16 +11,20 @@ dictionaries containing EMA indicator values aligned by timestamp.
 import sys
 from typing import List, Dict, Any
 
-# Import OHLCV from the parent module
+# Import OHLCV from candlecraft library
 try:
-    from pull_ohlcv import OHLCV
+    from candlecraft import OHLCV
 except ImportError:
-    # Fallback: try importing from parent directory
+    # Fallback: try importing from parent directory (for backward compatibility)
     import os
     parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if parent_dir not in sys.path:
         sys.path.insert(0, parent_dir)
-    from pull_ohlcv import OHLCV
+    try:
+        from candlecraft import OHLCV
+    except ImportError:
+        # Last resort: try pull_ohlcv (for legacy support)
+        from pull_ohlcv import OHLCV
 
 
 def calculate(ohlcv_data: List[OHLCV], period: int = 20) -> List[Dict[str, Any]]:

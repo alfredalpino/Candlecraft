@@ -22,11 +22,12 @@ from datetime import datetime, timezone, timedelta
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from pull_ohlcv import (
-    fetch_ohlcv, detect_asset_class, AssetClass,
+# Import from candlecraft library
+from candlecraft import fetch_ohlcv, OHLCV, AssetClass
+from candlecraft.utils import detect_asset_class, validate_ohlcv
+from candlecraft.providers import (
     authenticate_binance, authenticate_twelvedata,
     fetch_ohlcv_binance, fetch_ohlcv_twelvedata,
-    OHLCV, validate_ohlcv
 )
 
 
