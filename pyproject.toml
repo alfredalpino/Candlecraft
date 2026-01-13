@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "candlecraft"
+version = "0.1.0"
+description = "A clean, reusable Python library for fetching OHLCV data from multiple providers"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "AlfredAlpino"}
+]
+maintainers = [
+    {name = "AlfredAlpino"}
+]
+keywords = ["ohlcv", "crypto", "forex", "equity", "trading", "binance", "twelvedata", "financial-data"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial :: Investment",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "python-binance>=1.0.0",
+    "websocket-client>=1.6.0",
+    "twelvedata>=1.0.0",
+    "pandas>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/alfredalpino/Data-Puller-AiO"
+Documentation = "https://github.com/alfredalpino/Data-Puller-AiO#candlecraft-library"
+Repository = "https://github.com/alfredalpino/Data-Puller-AiO"
+Issues = "https://github.com/alfredalpino/Data-Puller-AiO/issues"
+
+[tool.setuptools]
+packages = ["candlecraft"]

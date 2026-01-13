@@ -8,5 +8,5 @@ multiple providers (Binance, Twelve Data) and computing technical indicators.
 from candlecraft.models import OHLCV, AssetClass
 from candlecraft.api import fetch_ohlcv, list_indicators
 
-__version__ = "1.0.0"
+__version__ = "0.1.0"
 __all__ = ["fetch_ohlcv", "list_indicators", "OHLCV", "AssetClass"]
