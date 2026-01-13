@@ -2,6 +2,7 @@
 
 A production-ready system for pulling OHLCV data from Cryptocurrency, Forex, and U.S. Equities markets.
 
+**Package page:** https://pypi.org/project/candlecraft/
 **Repository:** https://github.com/alfredalpino/Data-Puller-AiO  
 **License:** MIT License - See [LICENSE](LICENSE) for details
 
