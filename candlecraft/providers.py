@@ -5,10 +5,11 @@ Provider implementations for fetching OHLCV data.
 import os
 import sys
 import time
+import re
 from datetime import datetime
 from typing import List, Optional, TYPE_CHECKING, Any
 
-from candlecraft.models import OHLCV, AssetClass
+from candlecraft.models import OHLCV, AssetClass, RateLimitException
 from candlecraft.utils import to_utc, validate_ohlcv, normalize_symbol, get_default_timezone
 
 # Import providers
@@ -34,24 +35,9 @@ except ImportError:
     TDClient = Any  # type: ignore
 
 
-# Rate limiting for Twelve Data
-_last_api_call_time = 0
-_rate_limit_delay = 60
-
-
-def wait_for_rate_limit():
-    """Wait if necessary to respect rate limit (1 request per minute for Twelve Data)."""
-    global _last_api_call_time
-    
-    current_time = time.time()
-    time_since_last_call = current_time - _last_api_call_time
-    
-    if time_since_last_call < _rate_limit_delay:
-        wait_time = _rate_limit_delay - time_since_last_call
-        print(f"⏳ Rate limit: Waiting {wait_time:.1f} seconds before next request...")
-        time.sleep(wait_time)
-    
-    _last_api_call_time = time.time()
+# Rate limiting strategy types
+RATE_LIMIT_RAISE = "raise"
+RATE_LIMIT_SLEEP = "sleep"
 
 
 def authenticate_binance():
@@ -218,6 +204,7 @@ def fetch_ohlcv_twelvedata(
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,
     timezone: Optional[str] = None,
+    rate_limit_strategy: str = RATE_LIMIT_RAISE,
 ) -> List[OHLCV]:
     """Fetch OHLCV data from Twelve Data."""
     interval_map = {
@@ -242,20 +229,113 @@ def fetch_ohlcv_twelvedata(
     symbol_normalized = normalize_symbol(symbol, asset_class)
     default_timezone = timezone if timezone else get_default_timezone(asset_class)
     
-    try:
-        wait_for_rate_limit()
+    def _is_rate_limit_error(error: Exception) -> bool:
+        """Check if an exception is a rate limit error."""
+        error_msg = str(error)
+        error_str_lower = error_msg.lower()
+        error_type = type(error).__name__.lower()
         
+        # Check for common rate limit indicators
+        rate_limit_indicators = [
+            "429",
+            "rate limit",
+            "rate_limit",
+            "too many requests",
+            "quota exceeded",
+            "quota_exceeded",
+        ]
+        
+        # Check error message
+        if any(indicator in error_str_lower for indicator in rate_limit_indicators):
+            return True
+        
+        # Check error type name
+        if any(indicator in error_type for indicator in rate_limit_indicators):
+            return True
+        
+        # Check for HTTPError with status 429
+        if hasattr(error, "status_code") and error.status_code == 429:
+            return True
+        
+        if hasattr(error, "code") and error.code == 429:
+            return True
+        
+        return False
+    
+    def _extract_retry_after(error: Exception) -> Optional[float]:
+        """Extract retry-after duration from error if available."""
+        # Try to get from error attributes
+        if hasattr(error, "retry_after"):
+            try:
+                return float(error.retry_after)
+            except (ValueError, TypeError):
+                pass
+        
+        # Try to get from headers if available
+        if hasattr(error, "headers"):
+            headers = error.headers
+            if isinstance(headers, dict):
+                retry_after = headers.get("Retry-After") or headers.get("retry-after")
+                if retry_after:
+                    try:
+                        return float(retry_after)
+                    except (ValueError, TypeError):
+                        pass
+        
+        # Try to extract from error message
+        error_msg = str(error)
+        match = re.search(r"retry[_\s-]?after[:\s]+(\d+)", error_msg, re.IGNORECASE)
+        if match:
+            try:
+                return float(match.group(1))
+            except (ValueError, TypeError):
+                pass
+        
+        # Default to 60 seconds if rate limit detected but no specific duration
+        return 60.0
+    
+    def _handle_rate_limit_error(error: Exception) -> None:
+        """Handle rate limit errors based on strategy."""
+        if not _is_rate_limit_error(error):
+            # Not a rate limit error, re-raise as-is
+            raise error
+        
+        error_msg = str(error)
+        retry_after = _extract_retry_after(error)
+        
+        if rate_limit_strategy == RATE_LIMIT_SLEEP and retry_after is not None:
+            print(f"⏳ Rate limit encountered. Waiting {retry_after:.1f} seconds before retry...")
+            time.sleep(retry_after)
+        else:
+            raise RateLimitException(
+                provider="twelvedata",
+                message=error_msg,
+                retry_after=retry_after
+            )
+    
+    try:
         if limit:
             print(f"Fetching {limit} candles for {symbol_normalized} ({timeframe})...")
             
-            ts = client.time_series(
-                symbol=symbol_normalized,
-                interval=interval,
-                outputsize=limit,
-                timezone=default_timezone,
-            )
-            
-            df = ts.as_pandas()
+            try:
+                ts = client.time_series(
+                    symbol=symbol_normalized,
+                    interval=interval,
+                    outputsize=limit,
+                    timezone=default_timezone,
+                )
+                df = ts.as_pandas()
+            except Exception as e:
+                _handle_rate_limit_error(e)
+                # If we get here, sleep strategy was used and we waited
+                # Retry the request
+                ts = client.time_series(
+                    symbol=symbol_normalized,
+                    interval=interval,
+                    outputsize=limit,
+                    timezone=default_timezone,
+                )
+                df = ts.as_pandas()
         
         elif start and end:
             print(f"Fetching {symbol_normalized} ({timeframe}) from {start} to {end}...")
@@ -263,17 +343,27 @@ def fetch_ohlcv_twelvedata(
             start_str = start.strftime("%Y-%m-%d")
             end_str = end.strftime("%Y-%m-%d")
             
-            wait_for_rate_limit()
-            
-            ts = client.time_series(
-                symbol=symbol_normalized,
-                interval=interval,
-                start_date=start_str,
-                end_date=end_str,
-                timezone=default_timezone,
-            )
-            
-            df = ts.as_pandas()
+            try:
+                ts = client.time_series(
+                    symbol=symbol_normalized,
+                    interval=interval,
+                    start_date=start_str,
+                    end_date=end_str,
+                    timezone=default_timezone,
+                )
+                df = ts.as_pandas()
+            except Exception as e:
+                _handle_rate_limit_error(e)
+                # If we get here, sleep strategy was used and we waited
+                # Retry the request
+                ts = client.time_series(
+                    symbol=symbol_normalized,
+                    interval=interval,
+                    start_date=start_str,
+                    end_date=end_str,
+                    timezone=default_timezone,
+                )
+                df = ts.as_pandas()
         
         else:
             raise ValueError("Either limit or both start and end must be provided")
@@ -309,5 +399,8 @@ def fetch_ohlcv_twelvedata(
         print(f"✓ Successfully fetched {len(ohlcv_data)} candles")
         return ohlcv_data
     
+    except RateLimitException:
+        # Re-raise rate limit exceptions as-is
+        raise
     except Exception as e:
         raise RuntimeError(f"Error fetching data: {e}")

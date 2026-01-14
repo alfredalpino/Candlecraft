@@ -67,6 +67,41 @@ export TWELVEDATA_SECRET=your_key_here
 - **Binance**: [API Management](https://www.binance.com/en/my/settings/api-management) (optional, works without keys for public data)
 - **Twelve Data**: [Sign up](https://twelvedata.com/) (required for Forex/Equities)
 
+### Rate Limits & Provider Behavior
+
+Candlecraft does not enforce rate limits by default. Market data providers apply their own rate limits based on your subscription plan, and these limits vary significantly between free tiers and paid plans.
+
+When rate limits are exceeded, providers may return HTTP status codes (such as 429) along with retry-after information indicating when you can make your next request. By default, Candlecraft will raise a `RateLimitException` when a rate limit is encountered, allowing you to implement your own retry logic, backoff strategies, or error handling as appropriate for your application.
+
+Candlecraft provides an optional opt-in mechanism for automatic waiting. If you explicitly enable `rate_limit_strategy="sleep"`, the library will wait for the provider-specified retry duration before retrying the request. This is useful for simple scripts or applications where automatic waiting is acceptable.
+
+**Example with default behavior (fail fast):**
+```python
+from candlecraft import fetch_ohlcv, RateLimitException
+
+try:
+    data = fetch_ohlcv(symbol="AAPL", timeframe="1h", limit=100)
+except RateLimitException as e:
+    print(f"Rate limit hit for {e.provider}")
+    print(f"Retry after {e.retry_after} seconds")
+    # Implement your own retry logic here
+```
+
+**Example with opt-in automatic waiting:**
+```python
+from candlecraft import fetch_ohlcv
+
+# Automatically wait and retry on rate limits
+data = fetch_ohlcv(
+    symbol="AAPL",
+    timeframe="1h",
+    limit=100,
+    rate_limit_strategy="sleep"
+)
+```
+
+Users are responsible for implementing rate limiting, retries, or backoff logic in their own applications based on their specific needs and subscription plans.
+
 ### Supported Asset Classes
 
 | Asset Class | Provider | Example Symbols |
@@ -167,10 +202,12 @@ python pull_ohlcv.py --symbol EUR/USD --timeframe 1m --limit 1 --poll
 - **CSV**: Comma-separated values
 - **JSON**: JSON array of OHLCV objects
 
-### Rate Limiting
+### Rate Limiting (CLI)
+
+The CLI interface (`pull_ohlcv.py`) includes built-in rate limiting for convenience. This behavior is separate from the library's default behavior.
 
 - **Binance**: Public access unlimited; with API keys: 1200 requests/minute
-- **Twelve Data (Free Tier)**: 1 REST API request per minute (automatically handled)
+- **Twelve Data (Free Tier)**: 1 REST API request per minute (automatically handled in CLI)
 - **Polling Mode**: Automatically respects rate limits with 60-second intervals
 
 ### Troubleshooting

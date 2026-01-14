@@ -25,6 +25,7 @@ def fetch_ohlcv(
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,
     timezone: Optional[str] = None,
+    rate_limit_strategy: str = "raise",
 ) -> List[OHLCV]:
     """
     Unified function to fetch OHLCV data from appropriate provider.
@@ -37,6 +38,9 @@ def fetch_ohlcv(
         start: Start datetime (requires end)
         end: End datetime (requires start)
         timezone: Timezone for timestamps (Forex/Equities only)
+        rate_limit_strategy: How to handle rate limits. Options:
+            - "raise" (default): Raise RateLimitException when rate limit is hit
+            - "sleep": Automatically wait and retry when rate limit is hit
     
     Returns:
         List of OHLCV objects
@@ -44,6 +48,7 @@ def fetch_ohlcv(
     Raises:
         ValueError: For invalid arguments or unsupported timeframes
         RuntimeError: For API errors or connection failures
+        RateLimitException: When rate limit is exceeded (if rate_limit_strategy="raise")
     """
     if asset_class is None:
         asset_class = detect_asset_class(symbol)
@@ -54,7 +59,7 @@ def fetch_ohlcv(
     else:
         client = authenticate_twelvedata()
         return fetch_ohlcv_twelvedata(
-            client, symbol, timeframe, asset_class, limit, start, end, timezone
+            client, symbol, timeframe, asset_class, limit, start, end, timezone, rate_limit_strategy
         )
 
 
