@@ -1,4 +1,4 @@
-# Data Puller All-in-One
+# CandleCraft
 
 A production-ready system for pulling OHLCV data from Cryptocurrency, Forex, and U.S. Equities markets.
 
