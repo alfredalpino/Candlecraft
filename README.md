@@ -18,7 +18,12 @@ You can choose which provider to use, or let Candlecraft automatically select th
 
 **`candlecraft`** is a Python library for fetching OHLCV data from multiple providers. Published on [PyPI](https://pypi.org/project/candlecraft/).
 
-**Current Version:** v0.1.3
+**Current Version:** v0.1.4
+
+### What's New in v0.1.4
+
+- 🔄 **Branch Consolidation** - Merged master into main, unified codebase
+- 🏷️ **Repository Updates** - Updated to new Candlecraft repository structure
 
 ### What's New in v0.1.3
 

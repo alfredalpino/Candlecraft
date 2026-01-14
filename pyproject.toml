@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "candlecraft"
-version = "0.1.3"
+version = "0.1.4"
 description = "A clean, reusable Python library for fetching OHLCV data from multiple providers (Binance, Twelve Data) with flexible provider selection"
 readme = "README.md"
 license = {text = "MIT"}
