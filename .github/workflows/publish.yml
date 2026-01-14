@@ -36,3 +36,7 @@ jobs:
       
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # Use API token if available, otherwise fall back to OIDC trusted publishing
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          skip-existing: true
