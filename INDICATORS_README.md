@@ -1,8 +1,8 @@
 # Technical Indicators Reference
 
-Reference documentation for technical indicators available in Data Puller All-in-One.
+Reference documentation for technical indicators available in Candlecraft.
 
-**Repository:** <https://github.com/alfredalpino/Data-Puller-AiO>
+**Repository:** <https://github.com/alfredalpino/Candlecraft>
 
 ## Overview
 

@@ -15,6 +15,12 @@ class AssetClass(Enum):
     EQUITY = "equity"
 
 
+class Provider(Enum):
+    """Data provider types"""
+    BINANCE = "binance"
+    TWELVEDATA = "twelvedata"
+
+
 class RateLimitException(Exception):
     """
     Exception raised when a provider rate limit is encountered.

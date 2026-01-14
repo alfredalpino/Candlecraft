@@ -1,16 +1,32 @@
-# CandleCraft
+# Candlecraft
 
-A production-ready system for pulling OHLCV data from Cryptocurrency, Forex, and U.S. Equities markets.
+A production-ready Python library for fetching OHLCV data from Cryptocurrency, Forex, and U.S. Equities markets.
 
-**Package page:** https://pypi.org/project/candlecraft/
+**📦 [Package on PyPI](https://pypi.org/project/candlecraft/)** | **📚 [Documentation](#candlecraft-library)** | **⚖️ [License: MIT](LICENSE)**
 
-**Repository:** https://github.com/alfredalpino/Data-Puller-AiO  
+## Data Sources
 
-**License:** MIT License - See [LICENSE](LICENSE) for details
+Candlecraft supports multiple data providers, giving you flexibility to choose the best option for your needs:
+
+- **Twelve Data Finance** - Comprehensive market data for Forex, U.S. Equities, and Cryptocurrency
+- **Binance** - Leading cryptocurrency exchange with public API access
+- **More providers coming soon!** - We're continuously adding support for additional data sources
+
+You can choose which provider to use, or let Candlecraft automatically select the best available option based on your asset class and configured API keys.
 
 ## Candlecraft Library
 
-**`candlecraft`** is a Python library for fetching OHLCV data from multiple providers. Published on PyPI.
+**`candlecraft`** is a Python library for fetching OHLCV data from multiple providers. Published on [PyPI](https://pypi.org/project/candlecraft/).
+
+**Current Version:** v0.1.3
+
+### What's New in v0.1.3
+
+- ✨ **Provider Selection** - Choose which data provider to use (Binance or Twelve Data)
+- 🔍 **Provider Availability Checks** - Check which providers are available before fetching data
+- 🛡️ **Better Error Messages** - Clear guidance when providers aren't configured
+- 🔄 **Smart Fallbacks** - Automatic provider selection with intelligent fallbacks
+- 📚 **Enhanced Documentation** - Comprehensive examples and troubleshooting guide
 
 ### Installation
 
@@ -21,9 +37,9 @@ pip install candlecraft
 ### Quick Start
 
 ```python
-from candlecraft import fetch_ohlcv, OHLCV, AssetClass
+from candlecraft import fetch_ohlcv, OHLCV, AssetClass, Provider
 
-# Fetch OHLCV data (auto-detects asset class)
+# Fetch OHLCV data (auto-detects asset class and provider)
 data = fetch_ohlcv(
     symbol="BTCUSDT",
     timeframe="1h",
@@ -41,14 +57,30 @@ data = fetch_ohlcv(
     asset_class=AssetClass.FOREX,
     limit=50
 )
+
+# Choose a specific provider
+data = fetch_ohlcv(
+    symbol="BTCUSDT",
+    timeframe="1h",
+    provider=Provider.TWELVEDATA,  # Use Twelve Data instead of default Binance
+    limit=100
+)
+
+# Check available providers
+from candlecraft import get_available_providers
+available = get_available_providers()
+print(f"Available providers: {[p.value for p in available]}")
 ```
 
 ### API Reference
 
 - `fetch_ohlcv()` - Fetch OHLCV data from appropriate provider
 - `list_indicators()` - List available technical indicators
+- `get_available_providers()` - Get list of available providers
+- `is_provider_available()` - Check if a specific provider is available
 - `OHLCV` - Data model for OHLCV candles
 - `AssetClass` - Enum for asset class types (CRYPTO, FOREX, EQUITY)
+- `Provider` - Enum for provider types (BINANCE, TWELVEDATA)
 
 ### Configuration
 
@@ -102,13 +134,67 @@ data = fetch_ohlcv(
 
 Users are responsible for implementing rate limiting, retries, or backoff logic in their own applications based on their specific needs and subscription plans.
 
+### Provider Selection
+
+Candlecraft allows you to choose which provider to use for fetching data. This is especially useful if you only have API keys for one provider. The library will automatically select the best available provider, but you can also specify one explicitly.
+
+**Why Provider Selection Matters:**
+- Use the provider you have API keys for
+- Avoid errors when a default provider isn't configured
+- Flexibility to switch between providers based on your needs
+
+**Example: Using a specific provider**
+
+```python
+from candlecraft import fetch_ohlcv, Provider
+
+# Use Twelve Data for crypto (if you don't have Binance API)
+data = fetch_ohlcv(
+    symbol="BTCUSDT",
+    timeframe="1h",
+    provider=Provider.TWELVEDATA,  # Explicitly choose Twelve Data
+    limit=100
+)
+
+# Use Binance for crypto (default, but explicit)
+data = fetch_ohlcv(
+    symbol="ETHUSDT",
+    timeframe="1h",
+    provider=Provider.BINANCE,
+    limit=100
+)
+```
+
+**Example: Check available providers**
+
+```python
+from candlecraft import get_available_providers, is_provider_available, Provider
+
+# Get all available providers
+available = get_available_providers()
+print(f"Available providers: {[p.value for p in available]}")
+
+# Check specific provider
+if is_provider_available(Provider.BINANCE):
+    print("✓ Binance is available")
+if is_provider_available(Provider.TWELVEDATA):
+    print("✓ Twelve Data is available")
+```
+
+**Default Provider Selection:**
+- **Cryptocurrency**: Binance (if available), automatically falls back to Twelve Data
+- **Forex**: Twelve Data (required)
+- **U.S. Equities**: Twelve Data (required)
+
+If no provider is specified, the library automatically selects an available provider based on the asset class. If your preferred provider isn't available, you'll get a clear error message with instructions on how to set it up.
+
 ### Supported Asset Classes
 
-| Asset Class | Provider | Example Symbols |
-|-------------|----------|-----------------|
-| Cryptocurrency | Binance | BTCUSDT, ETHUSDT, BNBUSDT |
-| Forex | Twelve Data | EUR/USD, GBP/USD, USD/JPY |
-| U.S. Equities | Twelve Data | AAPL, MSFT, TSLA, GOOGL |
+| Asset Class | Default Provider | Alternative Provider | Example Symbols |
+|-------------|------------------|----------------------|-----------------|
+| Cryptocurrency | Binance | Twelve Data | BTCUSDT, ETHUSDT, BNBUSDT |
+| Forex | Twelve Data | - | EUR/USD, GBP/USD, USD/JPY |
+| U.S. Equities | Twelve Data | - | AAPL, MSFT, TSLA, GOOGL |
 
 ### Supported Timeframes
 
@@ -123,8 +209,8 @@ Users are responsible for implementing rate limiting, retries, or backoff logic 
 ### Installation (CLI)
 
 ```bash
-git clone https://github.com/alfredalpino/Data-Puller-AiO.git
-cd Data-Puller-AiO
+git clone https://github.com/alfredalpino/Candlecraft.git
+cd Candlecraft
 python -m venv dpa
 source dpa/bin/activate  # On Windows: dpa\Scripts\activate
 pip install -r requirements.txt
@@ -218,16 +304,43 @@ export TWELVEDATA_SECRET=your_key_here
 # Or add to .env file
 ```
 
-**2. "ModuleNotFoundError"**
+**2. "No provider available for crypto"**
+If you only have Twelve Data API keys and want to fetch crypto data:
+```python
+from candlecraft import fetch_ohlcv, Provider
+
+# Explicitly use Twelve Data for crypto
+data = fetch_ohlcv(
+    symbol="BTCUSDT",  # or use Twelve Data format like "BTC/USD"
+    timeframe="1h",
+    provider=Provider.TWELVEDATA,
+    limit=100
+)
+```
+
+**3. "ModuleNotFoundError"**
 ```bash
 source dpa/bin/activate
 pip install -r requirements.txt
 ```
 
-**3. "Subscription failed" (WebSocket)**
+**4. "Subscription failed" (WebSocket)**
 - Free tier may not support WebSocket for all symbols
 - Use polling mode instead: `--poll`
 - Check your Twelve Data plan tier
+
+**5. "Provider not available"**
+Check which providers are available:
+```python
+from candlecraft import get_available_providers, is_provider_available, Provider
+
+available = get_available_providers()
+print(f"Available providers: {[p.value for p in available]}")
+
+# Check specific provider
+if is_provider_available(Provider.BINANCE):
+    print("Binance is available")
+```
 
 ## Legacy Scripts
 
