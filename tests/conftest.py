@@ -2,16 +2,12 @@
 Pytest configuration and shared fixtures for testing
 """
 
-import pytest
 from datetime import datetime, timezone
 from typing import List
-import sys
-from pathlib import Path
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
+import pytest
 
-from pull_ohlcv import OHLCV, AssetClass
+from candlecraft import OHLCV, AssetClass
 
 
 @pytest.fixture
@@ -20,7 +16,7 @@ def sample_ohlcv_data() -> List[OHLCV]:
     data = []
     base_price = 100.0
     base_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
-    
+
     for i in range(100):
         # Create a simple price pattern
         price_change = (i % 10) * 0.5
@@ -29,7 +25,7 @@ def sample_ohlcv_data() -> List[OHLCV]:
         low = close - 1.0
         open_price = close - 0.5
         volume = 1000.0 + (i * 10)
-        
+
         candle = OHLCV(
             timestamp=base_time.replace(hour=i % 24),
             open=open_price,
@@ -43,7 +39,7 @@ def sample_ohlcv_data() -> List[OHLCV]:
             source="test"
         )
         data.append(candle)
-    
+
     return data
 
 
@@ -53,14 +49,14 @@ def sample_ohlcv_data_no_volume() -> List[OHLCV]:
     data = []
     base_price = 100.0
     base_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
-    
+
     for i in range(50):
         price_change = (i % 10) * 0.5
         close = base_price + price_change
         high = close + 1.0
         low = close - 1.0
         open_price = close - 0.5
-        
+
         candle = OHLCV(
             timestamp=base_time.replace(hour=i % 24),
             open=open_price,
@@ -74,7 +70,7 @@ def sample_ohlcv_data_no_volume() -> List[OHLCV]:
             source="test"
         )
         data.append(candle)
-    
+
     return data
 
 
@@ -84,7 +80,7 @@ def minimal_ohlcv_data() -> List[OHLCV]:
     data = []
     base_price = 100.0
     base_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
-    
+
     for i in range(5):
         close = base_price + i
         candle = OHLCV(
@@ -100,5 +96,5 @@ def minimal_ohlcv_data() -> List[OHLCV]:
             source="test"
         )
         data.append(candle)
-    
+
     return data

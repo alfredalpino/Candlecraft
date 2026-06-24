@@ -4,8 +4,8 @@ Data models for candlecraft library.
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
 from enum import Enum
+from typing import Optional
 
 
 class AssetClass(Enum):
@@ -24,7 +24,7 @@ class Provider(Enum):
 class RateLimitException(Exception):
     """
     Exception raised when a provider rate limit is encountered.
-    
+
     Attributes:
         provider: Name of the provider (e.g., 'twelvedata')
         retry_after: Optional retry-after duration in seconds if provided by the API

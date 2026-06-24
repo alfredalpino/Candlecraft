@@ -2,31 +2,41 @@
 Public API for candlecraft library.
 """
 
-from datetime import datetime
-from typing import List, Optional
-from pathlib import Path
+from __future__ import annotations
+
+import importlib
 import importlib.util
+import logging
 import os
+import re
+from datetime import datetime
+from importlib import resources
+from pathlib import Path
+from typing import Callable, List, Optional
 
 from candlecraft.models import OHLCV, AssetClass, Provider
-from candlecraft.utils import detect_asset_class
 from candlecraft.providers import (
+    BINANCE_AVAILABLE,
+    TWELVEDATA_AVAILABLE,
     authenticate_binance,
     authenticate_twelvedata,
     fetch_ohlcv_binance,
     fetch_ohlcv_twelvedata,
-    BINANCE_AVAILABLE,
-    TWELVEDATA_AVAILABLE,
 )
+from candlecraft.utils import detect_asset_class
+
+logger = logging.getLogger(__name__)
+
+_INDICATOR_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
 def is_provider_available(provider: Provider) -> bool:
     """
     Check if a provider is available (library installed and configured).
-    
+
     Args:
         provider: Provider to check
-    
+
     Returns:
         True if provider is available, False otherwise
     """
@@ -46,7 +56,7 @@ def is_provider_available(provider: Provider) -> bool:
 def get_available_providers() -> List[Provider]:
     """
     Get list of available providers (installed and configured).
-    
+
     Returns:
         List of available Provider enums
     """
@@ -61,10 +71,10 @@ def get_available_providers() -> List[Provider]:
 def _get_default_provider(asset_class: AssetClass) -> Optional[Provider]:
     """
     Get default provider for an asset class based on availability.
-    
+
     Args:
         asset_class: Asset class to get provider for
-    
+
     Returns:
         Default provider if available, None otherwise
     """
@@ -94,7 +104,7 @@ def fetch_ohlcv(
 ) -> List[OHLCV]:
     """
     Unified function to fetch OHLCV data from appropriate provider.
-    
+
     Args:
         symbol: Trading symbol (e.g., 'BTCUSDT', 'EUR/USD', 'AAPL')
         timeframe: Time interval (e.g., '1h', '1d', '1m')
@@ -107,10 +117,10 @@ def fetch_ohlcv(
         rate_limit_strategy: How to handle rate limits. Options:
             - "raise" (default): Raise RateLimitException when rate limit is hit
             - "sleep": Automatically wait and retry when rate limit is hit
-    
+
     Returns:
         List of OHLCV objects
-    
+
     Raises:
         ValueError: For invalid arguments, unsupported timeframes, or provider not available
         RuntimeError: For API errors or connection failures
@@ -118,7 +128,7 @@ def fetch_ohlcv(
     """
     if asset_class is None:
         asset_class = detect_asset_class(symbol)
-    
+
     # Determine which provider to use
     if provider is None:
         provider = _get_default_provider(asset_class)
@@ -146,9 +156,10 @@ def fetch_ohlcv(
             elif provider == Provider.TWELVEDATA:
                 raise ValueError(
                     "Twelve Data provider is not available. "
-                    "Install it with: pip install twelvedata and set TWELVEDATA_SECRET environment variable"
+                    "Install it with: pip install twelvedata and set "
+                    "TWELVEDATA_SECRET environment variable"
                 )
-        
+
         # Validate provider compatibility with asset class
         if asset_class == AssetClass.CRYPTO and provider == Provider.TWELVEDATA:
             # Twelve Data can support crypto, but we need to handle it
@@ -158,7 +169,7 @@ def fetch_ohlcv(
                 f"Binance provider does not support {asset_class.value}. "
                 f"Use Provider.TWELVEDATA for {asset_class.value} data."
             )
-    
+
     # Fetch data using the selected provider
     if provider == Provider.BINANCE:
         if asset_class != AssetClass.CRYPTO:
@@ -180,72 +191,93 @@ def fetch_ohlcv(
 def list_indicators(indicators_dir: Optional[Path] = None) -> List[str]:
     """
     List available indicator modules.
-    
+
     Args:
-        indicators_dir: Path to indicators directory (defaults to project indicators/)
-    
+        indicators_dir: Optional override path (defaults to packaged indicators)
+
     Returns:
         List of indicator names (without .py extension)
     """
     if indicators_dir is None:
-        # Default to project indicators directory
-        # This assumes the library is used within the project structure
-        # For standalone use, users should provide the path
-        project_root = Path(__file__).parent.parent.parent
-        indicators_dir = project_root / "indicators"
-    
+        pkg = resources.files("candlecraft.indicators")
+        return sorted(
+            entry.stem
+            for entry in pkg.iterdir()
+            if entry.name.endswith(".py")
+            and entry.stem != "__init__"
+            and not entry.stem.startswith("_")
+        )
+
     if not indicators_dir.exists():
         return []
-    
+
     indicators = []
     for file in indicators_dir.glob("*.py"):
         if file.name != "__init__.py" and not file.name.startswith("_"):
             indicators.append(file.stem)
-    
+
     return sorted(indicators)
 
 
-def load_indicator(indicator_name: str, indicators_dir: Optional[Path] = None):
+def load_indicator(
+    indicator_name: str,
+    indicators_dir: Optional[Path] = None,
+) -> Callable[..., list]:
     """
     Load an indicator module dynamically.
-    
+
     Args:
         indicator_name: Name of the indicator (e.g., 'macd')
-        indicators_dir: Path to indicators directory (defaults to project indicators/)
-    
+        indicators_dir: Optional override path (defaults to packaged indicators)
+
     Returns:
         The indicator's calculate function
-    
+
     Raises:
         FileNotFoundError: If indicator module not found
         AttributeError: If module doesn't export calculate function
+        ValueError: If indicator_name is invalid
     """
-    if indicators_dir is None:
-        project_root = Path(__file__).parent.parent.parent
-        indicators_dir = project_root / "indicators"
-    
-    indicator_file = indicators_dir / f"{indicator_name}.py"
-    
-    if not indicator_file.exists():
-        raise FileNotFoundError(
-            f"Indicator module not found: {indicator_file}. "
-            f"Expected file: {indicators_dir}/{indicator_name}.py"
+    if not _INDICATOR_NAME_PATTERN.match(indicator_name):
+        raise ValueError(
+            f"Invalid indicator name: {indicator_name!r}. "
+            "Use lowercase letters, digits, and underscores."
         )
-    
-    try:
-        spec = importlib.util.spec_from_file_location(f"indicators.{indicator_name}", indicator_file)
-        if spec is None or spec.loader is None:
-            raise ImportError(f"Failed to load indicator module: {indicator_name}")
-        
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        
-        if not hasattr(module, "calculate"):
-            raise AttributeError(
-                f"Indicator module '{indicator_name}' does not export a 'calculate' function"
+
+    if indicators_dir is not None:
+        indicator_file = indicators_dir / f"{indicator_name}.py"
+        if not indicator_file.exists():
+            raise FileNotFoundError(
+                f"Indicator module not found: {indicator_file}. "
+                f"Expected file: {indicators_dir}/{indicator_name}.py"
             )
-        
-        return module.calculate
-    
-    except Exception as e:
-        raise ImportError(f"Error loading indicator module '{indicator_name}': {e}")
+        try:
+            spec = importlib.util.spec_from_file_location(
+                f"candlecraft.indicators.{indicator_name}",
+                indicator_file,
+            )
+            if spec is None or spec.loader is None:
+                raise ImportError(f"Failed to load indicator module: {indicator_name}")
+
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+        except Exception as e:
+            raise ImportError(f"Error loading indicator module '{indicator_name}': {e}") from e
+    else:
+        module_path = f"candlecraft.indicators.{indicator_name}"
+        try:
+            module = importlib.import_module(module_path)
+        except ModuleNotFoundError as e:
+            raise FileNotFoundError(
+                f"Indicator module not found: {indicator_name}. "
+                f"Available indicators: {', '.join(list_indicators()) or 'none'}"
+            ) from e
+        except Exception as e:
+            raise ImportError(f"Error loading indicator module '{indicator_name}': {e}") from e
+
+    if not hasattr(module, "calculate"):
+        raise AttributeError(
+            f"Indicator module '{indicator_name}' does not export a 'calculate' function"
+        )
+
+    return module.calculate

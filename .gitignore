@@ -23,6 +23,7 @@ wheels/
 # Virtual Environment
 dpa/
 venv/
+.venv/
 ENV/
 env/
 

@@ -9,7 +9,7 @@ dictionaries containing EMA indicator values aligned by timestamp.
 """
 
 import sys
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 # Import OHLCV from candlecraft library
 try:
@@ -30,15 +30,15 @@ except ImportError:
 def calculate(ohlcv_data: List[OHLCV], period: int = 20) -> List[Dict[str, Any]]:
     """
     Calculate EMA (Exponential Moving Average) indicator values for OHLCV data.
-    
+
     Formula:
     - EMA = price × k + EMA_prev × (1 − k)
     - k = 2 / (n + 1)
-    
+
     Args:
         ohlcv_data: List of OHLCV objects ordered by timestamp
         period: EMA period (default: 20)
-    
+
     Returns:
         List of dictionaries with key: 'ema'
         Values are None for periods before enough data is available.
@@ -46,22 +46,22 @@ def calculate(ohlcv_data: List[OHLCV], period: int = 20) -> List[Dict[str, Any]]
     if len(ohlcv_data) < period:
         # Not enough data for EMA calculation
         return [{"ema": None} for _ in ohlcv_data]
-    
+
     closes = [candle.close for candle in ohlcv_data]
     result = []
-    
+
     multiplier = 2.0 / (period + 1)
-    
+
     # Start with SMA for the first EMA value
     sma = sum(closes[:period]) / period
     result.extend([{"ema": None} for _ in range(period - 1)])
     result.append({"ema": round(sma, 8)})
-    
+
     # Calculate EMA for remaining values
     ema_prev = sma
     for i in range(period, len(closes)):
         ema_value = (closes[i] - ema_prev) * multiplier + ema_prev
         result.append({"ema": round(ema_value, 8)})
         ema_prev = ema_value
-    
+
     return result

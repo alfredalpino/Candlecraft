@@ -6,7 +6,7 @@ Reference documentation for technical indicators available in Candlecraft.
 
 ## Overview
 
-Indicators are dynamically loaded from `indicators/` and calculated on OHLCV data fetched via `pull_ohlcv.py`. All indicators follow a consistent contract:
+Indicators are dynamically loaded from `candlecraft.indicators` and calculated on OHLCV data. All indicators follow a consistent contract:
 
 - **Pure functions** - No side effects, no API calls
 - **Timestamp-aligned** - Output values match input data timestamps
@@ -22,7 +22,7 @@ Indicators work with all asset classes (Crypto, Forex, Equities) and output form
 
 ## Indicator Contract
 
-Each indicator module in `indicators/` must export a `calculate` function:
+Each indicator module in `candlecraft/indicators/` must export a `calculate` function:
 
 ```python
 def calculate(ohlcv_data: List[OHLCV], **params) -> List[Dict[str, Any]]:

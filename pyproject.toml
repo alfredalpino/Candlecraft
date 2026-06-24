@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "candlecraft"
-version = "0.1.4"
-description = "A clean, reusable Python library for fetching OHLCV data from multiple providers (Binance, Twelve Data) with flexible provider selection"
+version = "0.2.0"
+description = "Unified OHLCV fetching for crypto, forex, and equities with multi-provider support and technical indicators"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
@@ -16,7 +16,7 @@ maintainers = [
 ]
 keywords = ["ohlcv", "crypto", "forex", "equity", "trading", "binance", "twelvedata", "financial-data"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: Financial and Insurance Industry",
     "License :: OSI Approved :: MIT License",
@@ -40,13 +40,34 @@ dependencies = [
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
+    "ruff>=0.4.0",
 ]
 
 [project.urls]
 Homepage = "https://github.com/alfredalpino/Candlecraft"
-Documentation = "https://github.com/alfredalpino/Candlecraft#candlecraft-library"
+Documentation = "https://github.com/alfredalpino/Candlecraft/blob/main/ARCHITECTURE.md"
 Repository = "https://github.com/alfredalpino/Candlecraft"
 Issues = "https://github.com/alfredalpino/Candlecraft/issues"
 
-[tool.setuptools]
-packages = ["candlecraft"]
+[tool.setuptools.packages.find]
+include = ["candlecraft*"]
+
+[tool.setuptools.package-data]
+candlecraft = ["py.typed", "indicators/*.py"]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: tests that call live external APIs (require API keys)",
+]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/test_ohlcv_pull.py" = ["E501", "W293"]
+"candlecraft/indicators/*.py" = ["E501", "W293"]

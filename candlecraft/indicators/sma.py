@@ -9,7 +9,7 @@ dictionaries containing SMA indicator values aligned by timestamp.
 """
 
 import sys
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 # Import OHLCV from candlecraft library
 try:
@@ -30,13 +30,13 @@ except ImportError:
 def calculate(ohlcv_data: List[OHLCV], period: int = 20) -> List[Dict[str, Any]]:
     """
     Calculate SMA (Simple Moving Average) indicator values for OHLCV data.
-    
+
     Formula: SMA = sum(close) / n
-    
+
     Args:
         ohlcv_data: List of OHLCV objects ordered by timestamp
         period: SMA period (default: 20)
-    
+
     Returns:
         List of dictionaries with key: 'sma'
         Values are None for periods before enough data is available.
@@ -44,10 +44,10 @@ def calculate(ohlcv_data: List[OHLCV], period: int = 20) -> List[Dict[str, Any]]
     if len(ohlcv_data) < period:
         # Not enough data for SMA calculation
         return [{"sma": None} for _ in ohlcv_data]
-    
+
     closes = [candle.close for candle in ohlcv_data]
     result = []
-    
+
     # Calculate SMA for each period
     for i in range(len(closes)):
         if i < period - 1:
@@ -55,5 +55,5 @@ def calculate(ohlcv_data: List[OHLCV], period: int = 20) -> List[Dict[str, Any]]
         else:
             sma = sum(closes[i - period + 1:i + 1]) / period
             result.append({"sma": round(sma, 8)})
-    
+
     return result

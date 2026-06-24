@@ -556,19 +556,12 @@ class CSVSink:
 
 def load_indicator_cli(indicator_name: str) -> Optional[Callable[[List[OHLCV]], List[Dict[str, Any]]]]:
     """
-    Dynamically load an indicator module from the indicators/ directory.
+    Load an indicator from the packaged candlecraft indicators.
+
     CLI wrapper that handles errors with sys.exit.
-    
-    Args:
-        indicator_name: Name of the indicator (e.g., 'macd')
-    
-    Returns:
-        The indicator's calculate function, or None if not found.
     """
-    indicators_dir = Path(__file__).parent / "indicators"
-    
     try:
-        return load_indicator(indicator_name, indicators_dir)
+        return load_indicator(indicator_name)
     except FileNotFoundError as e:
         print(f"✗ {e}")
         sys.exit(1)
@@ -688,7 +681,7 @@ Examples:
     parser.add_argument(
         "--indicator",
         type=str,
-        help="Calculate and display technical indicator (e.g., 'macd'). Indicator module must exist in indicators/ directory.",
+        help="Calculate and display technical indicator (e.g., 'macd'). Use `candlecraft list_indicators()` to see options.",
     )
     
     args = parser.parse_args()

@@ -3,7 +3,7 @@ Utility functions for candlecraft library.
 """
 
 from datetime import datetime, timezone
-from typing import Optional
+
 from candlecraft.models import OHLCV, AssetClass
 
 
@@ -29,23 +29,23 @@ def validate_ohlcv(dp: OHLCV) -> None:
 def detect_asset_class(symbol: str) -> AssetClass:
     """
     Detect asset class from symbol format.
-    
+
     Rules:
     - Crypto: Contains 'USDT', 'BTC', 'ETH' or similar patterns, no '/' or spaces
     - Forex: Contains '/' separator (e.g., EUR/USD)
     - Equity: Simple uppercase letters, no special separators (e.g., AAPL, MSFT)
     """
     symbol_upper = symbol.upper().strip()
-    
+
     # Check for forex pattern (contains / or _)
     if '/' in symbol or '_' in symbol:
         return AssetClass.FOREX
-    
+
     # Check for crypto patterns (ends with USDT, BTC, ETH, etc. or contains common crypto patterns)
     crypto_patterns = ['USDT', 'BTC', 'ETH', 'BNB', 'ADA', 'SOL', 'DOGE', 'XRP', 'DOT', 'LINK']
     if any(pattern in symbol_upper for pattern in crypto_patterns) and '/' not in symbol_upper:
         return AssetClass.CRYPTO
-    
+
     # Default to equity (simple uppercase letters)
     return AssetClass.EQUITY
 

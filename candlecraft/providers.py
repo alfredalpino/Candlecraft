@@ -2,15 +2,17 @@
 Provider implementations for fetching OHLCV data.
 """
 
+import logging
 import os
-import sys
-import time
 import re
+import time
 from datetime import datetime
-from typing import List, Optional, TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, List, Optional
 
 from candlecraft.models import OHLCV, AssetClass, RateLimitException
-from candlecraft.utils import to_utc, validate_ohlcv, normalize_symbol, get_default_timezone
+from candlecraft.utils import get_default_timezone, normalize_symbol, to_utc, validate_ohlcv
+
+logger = logging.getLogger(__name__)
 
 # Import providers
 if TYPE_CHECKING:
@@ -43,48 +45,56 @@ RATE_LIMIT_SLEEP = "sleep"
 def authenticate_binance():
     """Authenticate with Binance API."""
     if not BINANCE_AVAILABLE:
-        raise ImportError("python-binance library not installed. Install it with: pip install python-binance")
-    
+        raise ImportError(
+            "python-binance library not installed. "
+            "Install it with: pip install python-binance"
+        )
+
     api_key = os.getenv("BINANCE_API_KEY")
     api_secret = os.getenv("BINANCE_API_SECRET")
     testnet = os.getenv("BINANCE_TESTNET", "false").lower() == "true"
-    
+
     if api_key and api_secret:
         try:
             client = Client(api_key=api_key, api_secret=api_secret, testnet=testnet)
-            print(f"✓ Authenticated with Binance API (testnet: {testnet})")
+            logger.info("Authenticated with Binance API (testnet=%s)", testnet)
             return client
         except Exception as e:
-            raise RuntimeError(f"Binance authentication failed: {e}")
-    else:
-        try:
-            client = Client(testnet=testnet)
-            print("✓ Using Binance public API (no authentication required)")
-            print("  Note: For higher rate limits, set BINANCE_API_KEY and BINANCE_API_SECRET")
-            return client
-        except Exception as e:
-            raise RuntimeError(f"Failed to initialize Binance client: {e}")
+            raise RuntimeError(f"Binance authentication failed: {e}") from e
+
+    try:
+        client = Client(testnet=testnet)
+        logger.info("Using Binance public API (no authentication required)")
+        logger.debug(
+            "For higher rate limits, set BINANCE_API_KEY and BINANCE_API_SECRET"
+        )
+        return client
+    except Exception as e:
+        raise RuntimeError(f"Failed to initialize Binance client: {e}") from e
 
 
 def authenticate_twelvedata():
     """Authenticate with Twelve Data API."""
     if not TWELVEDATA_AVAILABLE:
-        raise ImportError("twelvedata library not installed. Install it with: pip install twelvedata")
-    
+        raise ImportError(
+            "twelvedata library not installed. "
+            "Install it with: pip install twelvedata"
+        )
+
     api_key = os.getenv("TWELVEDATA_SECRET")
-    
+
     if not api_key:
         raise ValueError(
             "TWELVEDATA_SECRET environment variable not set. "
             "Set it in your .env file or export it as an environment variable."
         )
-    
+
     try:
         client = TDClient(apikey=api_key)
-        print("✓ Authenticated with Twelve Data API")
+        logger.info("Authenticated with Twelve Data API")
         return client
     except Exception as e:
-        raise RuntimeError(f"Twelve Data authentication failed: {e}")
+        raise RuntimeError(f"Twelve Data authentication failed: {e}") from e
 
 
 def fetch_ohlcv_binance(
@@ -107,28 +117,36 @@ def fetch_ohlcv_binance(
         "1w": Client.KLINE_INTERVAL_1WEEK,
         "1M": Client.KLINE_INTERVAL_1MONTH,
     }
-    
+
     if timeframe not in interval_map:
         raise ValueError(
             f"Unsupported timeframe: {timeframe}. "
             f"Supported: {', '.join(interval_map.keys())}"
         )
-    
+
     interval = interval_map[timeframe]
     symbol_upper = symbol.upper()
-    
+
     try:
         client.ping()
     except Exception as e:
-        raise ConnectionError(f"Binance connection test failed: {e}")
-    
+        raise ConnectionError(f"Binance connection test failed: {e}") from e
+
     try:
         if limit:
             if limit > 1000:
-                print("⚠ Warning: Binance limit is 1000 candles per request. Using 1000.")
+                logger.warning(
+                    "Binance limit is 1000 candles per request; using 1000 (requested %s)",
+                    limit,
+                )
                 limit = 1000
-            
-            print(f"Fetching {limit} candles for {symbol_upper} ({timeframe})...")
+
+            logger.info(
+                "Fetching %s candles for %s (%s) from Binance",
+                limit,
+                symbol_upper,
+                timeframe,
+            )
             klines = client.get_klines(
                 symbol=symbol_upper,
                 interval=interval,
@@ -137,12 +155,18 @@ def fetch_ohlcv_binance(
         elif start and end:
             start_ms = int(start.timestamp() * 1000)
             end_ms = int(end.timestamp() * 1000)
-            
-            print(f"Fetching {symbol_upper} ({timeframe}) from {start} to {end}...")
-            
+
+            logger.info(
+                "Fetching %s (%s) from %s to %s from Binance",
+                symbol_upper,
+                timeframe,
+                start,
+                end,
+            )
+
             all_klines = []
             current_start = start_ms
-            
+
             while current_start < end_ms:
                 klines = client.get_klines(
                     symbol=symbol_upper,
@@ -151,24 +175,24 @@ def fetch_ohlcv_binance(
                     endTime=end_ms,
                     limit=1000,
                 )
-                
+
                 if not klines:
                     break
-                
+
                 all_klines.extend(klines)
-                
+
                 if len(klines) < 1000:
                     break
-                
+
                 current_start = klines[-1][0] + 1
-            
+
             klines = all_klines
         else:
             raise ValueError("Either limit or both start and end must be provided")
-        
+
         if not klines:
             raise ValueError(f"No data returned for {symbol_upper}")
-        
+
         ohlcv_data = []
         for kline in klines:
             ohlcv = OHLCV(
@@ -185,14 +209,14 @@ def fetch_ohlcv_binance(
             )
             validate_ohlcv(ohlcv)
             ohlcv_data.append(ohlcv)
-        
-        print(f"✓ Successfully fetched {len(ohlcv_data)} candles")
+
+        logger.info("Fetched %s candles from Binance for %s", len(ohlcv_data), symbol_upper)
         return ohlcv_data
-    
+
     except BinanceAPIException as e:
-        raise RuntimeError(f"Binance API error: {e}")
+        raise RuntimeError(f"Binance API error: {e}") from e
     except Exception as e:
-        raise RuntimeError(f"Error fetching data: {e}")
+        raise RuntimeError(f"Error fetching data: {e}") from e
 
 
 def fetch_ohlcv_twelvedata(
@@ -218,24 +242,23 @@ def fetch_ohlcv_twelvedata(
         "1w": "1week",
         "1M": "1month",
     }
-    
+
     if timeframe not in interval_map:
         raise ValueError(
             f"Unsupported timeframe: {timeframe}. "
             f"Supported: {', '.join(interval_map.keys())}"
         )
-    
+
     interval = interval_map[timeframe]
     symbol_normalized = normalize_symbol(symbol, asset_class)
     default_timezone = timezone if timezone else get_default_timezone(asset_class)
-    
+
     def _is_rate_limit_error(error: Exception) -> bool:
         """Check if an exception is a rate limit error."""
         error_msg = str(error)
         error_str_lower = error_msg.lower()
         error_type = type(error).__name__.lower()
-        
-        # Check for common rate limit indicators
+
         rate_limit_indicators = [
             "429",
             "rate limit",
@@ -244,34 +267,29 @@ def fetch_ohlcv_twelvedata(
             "quota exceeded",
             "quota_exceeded",
         ]
-        
-        # Check error message
+
         if any(indicator in error_str_lower for indicator in rate_limit_indicators):
             return True
-        
-        # Check error type name
+
         if any(indicator in error_type for indicator in rate_limit_indicators):
             return True
-        
-        # Check for HTTPError with status 429
+
         if hasattr(error, "status_code") and error.status_code == 429:
             return True
-        
+
         if hasattr(error, "code") and error.code == 429:
             return True
-        
+
         return False
-    
+
     def _extract_retry_after(error: Exception) -> Optional[float]:
         """Extract retry-after duration from error if available."""
-        # Try to get from error attributes
         if hasattr(error, "retry_after"):
             try:
                 return float(error.retry_after)
             except (ValueError, TypeError):
                 pass
-        
-        # Try to get from headers if available
+
         if hasattr(error, "headers"):
             headers = error.headers
             if isinstance(headers, dict):
@@ -281,8 +299,7 @@ def fetch_ohlcv_twelvedata(
                         return float(retry_after)
                     except (ValueError, TypeError):
                         pass
-        
-        # Try to extract from error message
+
         error_msg = str(error)
         match = re.search(r"retry[_\s-]?after[:\s]+(\d+)", error_msg, re.IGNORECASE)
         if match:
@@ -290,33 +307,39 @@ def fetch_ohlcv_twelvedata(
                 return float(match.group(1))
             except (ValueError, TypeError):
                 pass
-        
-        # Default to 60 seconds if rate limit detected but no specific duration
+
         return 60.0
-    
+
     def _handle_rate_limit_error(error: Exception) -> None:
         """Handle rate limit errors based on strategy."""
         if not _is_rate_limit_error(error):
-            # Not a rate limit error, re-raise as-is
             raise error
-        
+
         error_msg = str(error)
         retry_after = _extract_retry_after(error)
-        
+
         if rate_limit_strategy == RATE_LIMIT_SLEEP and retry_after is not None:
-            print(f"⏳ Rate limit encountered. Waiting {retry_after:.1f} seconds before retry...")
+            logger.warning(
+                "Twelve Data rate limit encountered; waiting %.1f seconds before retry",
+                retry_after,
+            )
             time.sleep(retry_after)
         else:
             raise RateLimitException(
                 provider="twelvedata",
                 message=error_msg,
-                retry_after=retry_after
+                retry_after=retry_after,
             )
-    
+
     try:
         if limit:
-            print(f"Fetching {limit} candles for {symbol_normalized} ({timeframe})...")
-            
+            logger.info(
+                "Fetching %s candles for %s (%s) from Twelve Data",
+                limit,
+                symbol_normalized,
+                timeframe,
+            )
+
             try:
                 ts = client.time_series(
                     symbol=symbol_normalized,
@@ -327,8 +350,6 @@ def fetch_ohlcv_twelvedata(
                 df = ts.as_pandas()
             except Exception as e:
                 _handle_rate_limit_error(e)
-                # If we get here, sleep strategy was used and we waited
-                # Retry the request
                 ts = client.time_series(
                     symbol=symbol_normalized,
                     interval=interval,
@@ -336,13 +357,19 @@ def fetch_ohlcv_twelvedata(
                     timezone=default_timezone,
                 )
                 df = ts.as_pandas()
-        
+
         elif start and end:
-            print(f"Fetching {symbol_normalized} ({timeframe}) from {start} to {end}...")
-            
+            logger.info(
+                "Fetching %s (%s) from %s to %s from Twelve Data",
+                symbol_normalized,
+                timeframe,
+                start,
+                end,
+            )
+
             start_str = start.strftime("%Y-%m-%d")
             end_str = end.strftime("%Y-%m-%d")
-            
+
             try:
                 ts = client.time_series(
                     symbol=symbol_normalized,
@@ -354,8 +381,6 @@ def fetch_ohlcv_twelvedata(
                 df = ts.as_pandas()
             except Exception as e:
                 _handle_rate_limit_error(e)
-                # If we get here, sleep strategy was used and we waited
-                # Retry the request
                 ts = client.time_series(
                     symbol=symbol_normalized,
                     interval=interval,
@@ -364,13 +389,13 @@ def fetch_ohlcv_twelvedata(
                     timezone=default_timezone,
                 )
                 df = ts.as_pandas()
-        
+
         else:
             raise ValueError("Either limit or both start and end must be provided")
-        
+
         if df.empty:
             raise ValueError(f"No data returned for {symbol_normalized}")
-        
+
         ohlcv_data = []
         for timestamp, row in df.iterrows():
             try:
@@ -390,17 +415,19 @@ def fetch_ohlcv_twelvedata(
                 validate_ohlcv(ohlcv)
                 ohlcv_data.append(ohlcv)
             except ValueError:
-                # Validation errors must fail fast - do not suppress
                 raise
             except Exception as e:
-                print(f"⚠ Warning: Failed to process data point: {e}")
+                logger.warning("Failed to process Twelve Data row: %s", e)
                 continue
-        
-        print(f"✓ Successfully fetched {len(ohlcv_data)} candles")
+
+        logger.info(
+            "Fetched %s candles from Twelve Data for %s",
+            len(ohlcv_data),
+            symbol_normalized,
+        )
         return ohlcv_data
-    
+
     except RateLimitException:
-        # Re-raise rate limit exceptions as-is
         raise
     except Exception as e:
-        raise RuntimeError(f"Error fetching data: {e}")
+        raise RuntimeError(f"Error fetching data: {e}") from e
